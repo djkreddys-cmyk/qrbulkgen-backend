@@ -18,8 +18,8 @@ const SECRET = process.env.JWT_SECRET || 'qrbatch-secret';
 const FREE_LIMIT = 50;
 
 // Health check route (VERY IMPORTANT FOR RAILWAY)
-app.get('/', (req, res) => {
-  res.send('QRBulkGen API Running');
+app.all('/', (req, res) => {
+  res.status(200).send('QRBulkGen API Running');
 });
 
 // Tables
@@ -167,3 +167,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
+
