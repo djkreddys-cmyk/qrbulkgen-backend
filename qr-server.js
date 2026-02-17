@@ -163,8 +163,14 @@ app.post('/api/verify-payment', auth, (req, res) => {
 
 // ---------------- START SERVER ----------------
 
+const http = require('http');
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+
+const server = http.createServer(app);
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`HTTP Server running on port ${PORT}`);
 });
+
 
