@@ -1,3 +1,16 @@
+const http = require('http');
+
+const PORT = process.env.PORT || 3000;
+
+// Ultra-fast health response (Railway check)
+http.createServer((req, res) => {
+  if (req.url === '/' || req.method === 'HEAD') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
+  }
+}).listen(PORT, '0.0.0.0');
+
+
 // QR SaaS Backend (Login + History + Razorpay + Daily Free Limit)
 
 const express = require('express');
@@ -163,14 +176,7 @@ app.post('/api/verify-payment', auth, (req, res) => {
 
 // ---------------- START SERVER ----------------
 
-const http = require('http');
-
-const PORT = process.env.PORT || 3000;
-
-const server = http.createServer(app);
-
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`HTTP Server running on port ${PORT}`);
-});
+const expressServer = http.createServer(app);
+expressServer.listen(process.env.PORT);
 
 
