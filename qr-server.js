@@ -182,20 +182,6 @@ app.post('/api/verify-payment',auth,(req,res)=>{
 const PORT=process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>console.log("Server running on port",PORT));
 
-// ===============RESET PASSWORD (NO EMAIL SYSTEM)=============
-app.post('/api/reset-password', async (req,res)=>{
-  const {email,newPassword} = req.body;
-
-  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
-  if(!user) return res.status(404).send("Email not registered");
-
-  const hash = await bcrypt.hash(newPassword,10);
-
-  db.prepare('UPDATE users SET password=? WHERE email=?')
-    .run(hash,email);
-
-  res.send("Password updated successfully");
-});
 // CHECK EMAIL EXISTS
 app.post('/api/check-email', (req,res)=>{
   const {email}=req.body;
@@ -205,4 +191,34 @@ app.post('/api/check-email', (req,res)=>{
   if(user) return res.json({exists:true});
   else return res.json({exists:false});
 });
+// ======================Check if email exists====================
+app.post('/api/check-email', (req, res) => {
+  const { email } = req.body;
+
+  if (!email) return res.json({ exists: false });
+
+  const user = db.prepare('SELECT id FROM users WHERE email=?').get(email);
+
+  res.json({ exists: !!user });
+});
+// =================Reset password (after email verified)=========================
+app.post('/api/reset-password', async (req, res) => {
+  const { email, newPassword } = req.body;
+
+  if (!email || !newPassword)
+    return res.status(400).send("Missing data");
+
+  const user = db.prepare('SELECT id FROM users WHERE email=?').get(email);
+
+  if (!user)
+    return res.status(404).send("Email not registered");
+
+  const hash = await bcrypt.hash(newPassword, 10);
+
+  db.prepare('UPDATE users SET password=? WHERE email=?')
+    .run(hash, email);
+
+  res.send("Password updated successfully");
+});
+
 
