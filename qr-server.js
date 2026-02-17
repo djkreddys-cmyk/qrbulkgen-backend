@@ -65,4 +65,6 @@ app.get('/api/projects',auth,(req,res)=>{
  res.json(rows);
 });
 
-app.listen(3000,()=>console.log('Server running http://localhost:3000'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
