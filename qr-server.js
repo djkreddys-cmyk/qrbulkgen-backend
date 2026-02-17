@@ -1,4 +1,4 @@
-// ================= QRBulkGen SaaS Backend =================
+// ================= QRBulkGen Backend (FINAL SIMPLE VERSION) =================
 
 const express = require('express');
 const cors = require('cors');
@@ -6,29 +6,25 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
 const Razorpay = require('razorpay');
-const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Railway writable DB
+// Railway writable database
 const db = new Database('/tmp/qr.db');
 
-// Fast health check (Railway uptime ping)
+// Health check (Railway uptime monitor)
 app.use((req,res,next)=>{
   if(req.method==='HEAD' || req.url==='/') return res.status(200).send('OK');
   next();
 });
 
 // ================= CONFIG =================
-
-const SECRET = process.env.JWT_SECRET || "qrbatch-secret";
-const RESET_SECRET = process.env.RESET_SECRET || "reset-secret";
+const SECRET = process.env.JWT_SECRET || "qrbatch_secret";
 const FREE_LIMIT = 50;
 
 // ================= TABLES =================
-
 db.exec(`
 CREATE TABLE IF NOT EXISTS users(
  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,25 +50,13 @@ CREATE TABLE IF NOT EXISTS usage(
 );
 `);
 
-// ================= EMAIL =================
-
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
-
 // ================= RAZORPAY =================
-
 const razor = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || "test",
   key_secret: process.env.RAZORPAY_SECRET || "test"
 });
 
 // ================= AUTH MIDDLEWARE =================
-
 function auth(req,res,next){
   const token=req.headers.authorization;
   if(!token) return res.status(401).send("No token");
@@ -86,7 +70,6 @@ function auth(req,res,next){
 }
 
 // ================= FREE LIMIT =================
-
 function checkFreeLimit(req,res,next){
   const user=db.prepare('SELECT plan FROM users WHERE id=?').get(req.user.id);
   if(user.plan==='pro') return next();
@@ -111,14 +94,18 @@ function checkFreeLimit(req,res,next){
 }
 
 // ================= REGISTER =================
-
 app.post('/api/register',async(req,res)=>{
   const {name,email,password}=req.body;
+
+  if(!name || !email || !password)
+    return res.status(400).send("Missing fields");
+
   const hash=await bcrypt.hash(password,10);
 
   try{
     db.prepare('INSERT INTO users(name,email,password) VALUES(?,?,?)')
       .run(name,email,hash);
+
     res.send("Registered successfully");
   }catch{
     res.status(400).send("User already exists");
@@ -126,7 +113,6 @@ app.post('/api/register',async(req,res)=>{
 });
 
 // ================= LOGIN =================
-
 app.post('/api/login',(req,res)=>{
   const {email,password}=req.body;
 
@@ -139,58 +125,33 @@ app.post('/api/login',(req,res)=>{
     id:user.id,
     email:user.email,
     name:user.name
-  },SECRET);
+  },SECRET,{expiresIn:"7d"});
 
   res.json({token,plan:user.plan});
 });
 
-// ================= FORGOT PASSWORD =================
+// ================= DIRECT PASSWORD RESET =================
+app.post('/api/reset-password-direct', async (req, res) => {
 
-app.post('/api/forgot-password',async(req,res)=>{
-  const {email}=req.body;
+  const { email, password } = req.body;
 
-  const user=db.prepare('SELECT * FROM users WHERE email=?').get(email);
-  if(!user) return res.status(404).send("Email not registered");
+  if(!email || !password)
+    return res.status(400).send("Missing fields");
 
-  const token=jwt.sign({id:user.id,email:user.email},RESET_SECRET,{expiresIn:'15m'});
+  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
 
-  const resetLink=`https://qrbulkgen.com/reset-password.html?token=${token}`;
+  if(!user)
+    return res.status(404).send("Email not registered");
 
-  await transporter.sendMail({
-    from:process.env.EMAIL_USER,
-    to:email,
-    subject:"QRBulkGen Password Reset",
-    html:`
-      <h2>Password Reset</h2>
-      <p>Click below link:</p>
-      <a href="${resetLink}">${resetLink}</a>
-      <p>This link expires in 15 minutes.</p>
-    `
-  });
+  const hash = await bcrypt.hash(password, 10);
 
-  res.send("Reset link sent to your email");
-});
+  db.prepare('UPDATE users SET password=? WHERE email=?')
+    .run(hash, email);
 
-// ================= RESET PASSWORD =================
-
-app.post('/api/reset-password',async(req,res)=>{
-  const {token,password}=req.body;
-
-  try{
-    const user=jwt.verify(token,RESET_SECRET);
-    const hash=await bcrypt.hash(password,10);
-
-    db.prepare('UPDATE users SET password=? WHERE id=?')
-      .run(hash,user.id);
-
-    res.send("Password updated successfully");
-  }catch{
-    res.status(400).send("Invalid or expired link");
-  }
+  res.send("Password updated successfully");
 });
 
 // ================= PROJECTS =================
-
 app.post('/api/check-limit',auth,checkFreeLimit,(req,res)=>res.send("Allowed"));
 
 app.post('/api/projects',auth,(req,res)=>{
@@ -207,7 +168,6 @@ app.get('/api/projects',auth,(req,res)=>{
 });
 
 // ================= PAYMENTS =================
-
 app.post('/api/create-order',auth,async(req,res)=>{
   const order=await razor.orders.create({amount:19900,currency:'INR'});
   res.json(order);
@@ -218,7 +178,6 @@ app.post('/api/verify-payment',auth,(req,res)=>{
   res.send("Payment success, Pro activated");
 });
 
-// ================= START SERVER =================
-
+// ================= SERVER =================
 const PORT=process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>console.log("Server running on port",PORT));
