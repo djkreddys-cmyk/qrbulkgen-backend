@@ -181,3 +181,18 @@ app.post('/api/verify-payment',auth,(req,res)=>{
 // ================= SERVER =================
 const PORT=process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>console.log("Server running on port",PORT));
+
+// ===============RESET PASSWORD (NO EMAIL SYSTEM)=============
+app.post('/api/reset-password', async (req,res)=>{
+  const {email,newPassword} = req.body;
+
+  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+  if(!user) return res.status(404).send("Email not registered");
+
+  const hash = await bcrypt.hash(newPassword,10);
+
+  db.prepare('UPDATE users SET password=? WHERE email=?')
+    .run(hash,email);
+
+  res.send("Password updated successfully");
+});
