@@ -196,3 +196,13 @@ app.post('/api/reset-password', async (req,res)=>{
 
   res.send("Password updated successfully");
 });
+// CHECK EMAIL EXISTS
+app.post('/api/check-email', (req,res)=>{
+  const {email}=req.body;
+
+  const user=db.prepare('SELECT id FROM users WHERE email=?').get(email);
+
+  if(user) return res.json({exists:true});
+  else return res.json({exists:false});
+});
+
