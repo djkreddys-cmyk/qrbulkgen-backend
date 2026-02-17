@@ -1,4 +1,4 @@
-// QR SaaS Backend (Railway Compatible)
+// ================= QRBulkGen SaaS Backend =================
 
 const express = require('express');
 const cors = require('cors');
@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
 const Razorpay = require('razorpay');
+const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(cors());
@@ -14,22 +15,24 @@ app.use(express.json());
 // Railway writable DB
 const db = new Database('/tmp/qr.db');
 
-// --- FAST HEALTH CHECK (very important) ---
-app.use((req, res, next) => {
-  if (req.method === 'HEAD' || req.url === '/') {
-    return res.status(200).send('OK');
-  }
+// Fast health check (Railway uptime ping)
+app.use((req,res,next)=>{
+  if(req.method==='HEAD' || req.url==='/') return res.status(200).send('OK');
   next();
 });
 
-// Config
-const SECRET = process.env.JWT_SECRET || 'qrbatch-secret';
+// ================= CONFIG =================
+
+const SECRET = process.env.JWT_SECRET || "qrbatch-secret";
+const RESET_SECRET = process.env.RESET_SECRET || "reset-secret";
 const FREE_LIMIT = 50;
 
-// Tables
+// ================= TABLES =================
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS users(
  id INTEGER PRIMARY KEY AUTOINCREMENT,
+ name TEXT,
  email TEXT UNIQUE,
  password TEXT,
  plan TEXT DEFAULT 'free'
@@ -51,102 +54,171 @@ CREATE TABLE IF NOT EXISTS usage(
 );
 `);
 
-// Razorpay
-const razor = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'test',
-  key_secret: process.env.RAZORPAY_SECRET || 'test'
+// ================= EMAIL =================
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
 });
 
-// ---------- AUTH ----------
-function auth(req, res, next) {
-  const token = req.headers.authorization;
-  if (!token) return res.status(401).send('No token');
+// ================= RAZORPAY =================
 
-  try {
-    req.user = jwt.verify(token, SECRET);
+const razor = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || "test",
+  key_secret: process.env.RAZORPAY_SECRET || "test"
+});
+
+// ================= AUTH MIDDLEWARE =================
+
+function auth(req,res,next){
+  const token=req.headers.authorization;
+  if(!token) return res.status(401).send("No token");
+
+  try{
+    req.user=jwt.verify(token,SECRET);
     next();
-  } catch {
-    return res.status(401).send('Invalid token');
+  }catch{
+    res.status(401).send("Invalid token");
   }
 }
 
-// ---------- FREE LIMIT ----------
-function checkFreeLimit(req, res, next) {
-  const user = db.prepare('SELECT plan FROM users WHERE id=?').get(req.user.id);
-  if (user.plan === 'pro') return next();
+// ================= FREE LIMIT =================
 
-  const today = new Date().toISOString().slice(0, 10);
-  let row = db.prepare('SELECT * FROM usage WHERE user_id=? AND date=?')
-    .get(req.user.id, today);
+function checkFreeLimit(req,res,next){
+  const user=db.prepare('SELECT plan FROM users WHERE id=?').get(req.user.id);
+  if(user.plan==='pro') return next();
 
-  if (!row) {
+  const today=new Date().toISOString().slice(0,10);
+  let row=db.prepare('SELECT * FROM usage WHERE user_id=? AND date=?')
+    .get(req.user.id,today);
+
+  if(!row){
     db.prepare('INSERT INTO usage(user_id,date,count) VALUES(?,?,0)')
-      .run(req.user.id, today);
-    row = { count: 0 };
+      .run(req.user.id,today);
+    row={count:0};
   }
 
-  if (row.count >= FREE_LIMIT)
-    return res.status(403).json({ message: 'Daily free limit reached', limit: FREE_LIMIT });
+  if(row.count>=FREE_LIMIT)
+    return res.status(403).json({message:'Daily free limit reached',limit:FREE_LIMIT});
 
   db.prepare('UPDATE usage SET count=count+1 WHERE user_id=? AND date=?')
-    .run(req.user.id, today);
+    .run(req.user.id,today);
 
   next();
 }
 
-// ---------- AUTH ROUTES ----------
-app.post('/api/register', async (req, res) => {
-  const { email, password } = req.body;
-  const hash = await bcrypt.hash(password, 10);
+// ================= REGISTER =================
 
-  try {
-    db.prepare('INSERT INTO users(email,password) VALUES(?,?)').run(email, hash);
-    res.send('Registered');
-  } catch {
-    res.status(400).send('User exists');
+app.post('/api/register',async(req,res)=>{
+  const {name,email,password}=req.body;
+  const hash=await bcrypt.hash(password,10);
+
+  try{
+    db.prepare('INSERT INTO users(name,email,password) VALUES(?,?,?)')
+      .run(name,email,hash);
+    res.send("Registered successfully");
+  }catch{
+    res.status(400).send("User already exists");
   }
 });
 
-app.post('/api/login', (req, res) => {
-  const { email, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+// ================= LOGIN =================
 
-  if (!user || !bcrypt.compareSync(password, user.password))
-    return res.status(401).send('Invalid');
+app.post('/api/login',(req,res)=>{
+  const {email,password}=req.body;
 
-  const token = jwt.sign({ id: user.id, email: user.email }, SECRET);
-  res.json({ token, plan: user.plan });
+  const user=db.prepare('SELECT * FROM users WHERE email=?').get(email);
+
+  if(!user || !bcrypt.compareSync(password,user.password))
+    return res.status(401).send("Invalid credentials");
+
+  const token=jwt.sign({
+    id:user.id,
+    email:user.email,
+    name:user.name
+  },SECRET);
+
+  res.json({token,plan:user.plan});
 });
 
-// ---------- PROJECTS ----------
-app.post('/api/check-limit', auth, checkFreeLimit, (req, res) => res.send('Allowed'));
+// ================= FORGOT PASSWORD =================
 
-app.post('/api/projects', auth, (req, res) => {
-  const { name, data } = req.body;
+app.post('/api/forgot-password',async(req,res)=>{
+  const {email}=req.body;
+
+  const user=db.prepare('SELECT * FROM users WHERE email=?').get(email);
+  if(!user) return res.status(404).send("Email not registered");
+
+  const token=jwt.sign({id:user.id,email:user.email},RESET_SECRET,{expiresIn:'15m'});
+
+  const resetLink=`https://qrbulkgen.com/reset-password.html?token=${token}`;
+
+  await transporter.sendMail({
+    from:process.env.EMAIL_USER,
+    to:email,
+    subject:"QRBulkGen Password Reset",
+    html:`
+      <h2>Password Reset</h2>
+      <p>Click below link:</p>
+      <a href="${resetLink}">${resetLink}</a>
+      <p>This link expires in 15 minutes.</p>
+    `
+  });
+
+  res.send("Reset link sent to your email");
+});
+
+// ================= RESET PASSWORD =================
+
+app.post('/api/reset-password',async(req,res)=>{
+  const {token,password}=req.body;
+
+  try{
+    const user=jwt.verify(token,RESET_SECRET);
+    const hash=await bcrypt.hash(password,10);
+
+    db.prepare('UPDATE users SET password=? WHERE id=?')
+      .run(hash,user.id);
+
+    res.send("Password updated successfully");
+  }catch{
+    res.status(400).send("Invalid or expired link");
+  }
+});
+
+// ================= PROJECTS =================
+
+app.post('/api/check-limit',auth,checkFreeLimit,(req,res)=>res.send("Allowed"));
+
+app.post('/api/projects',auth,(req,res)=>{
+  const {name,data}=req.body;
   db.prepare('INSERT INTO projects(user_id,name,data) VALUES(?,?,?)')
-    .run(req.user.id, name, JSON.stringify(data));
-  res.send('Saved');
+    .run(req.user.id,name,JSON.stringify(data));
+  res.send("Saved");
 });
 
-app.get('/api/projects', auth, (req, res) => {
-  const rows = db.prepare('SELECT * FROM projects WHERE user_id=? ORDER BY created DESC')
+app.get('/api/projects',auth,(req,res)=>{
+  const rows=db.prepare('SELECT * FROM projects WHERE user_id=? ORDER BY created DESC')
     .all(req.user.id);
   res.json(rows);
 });
 
-// ---------- PAYMENTS ----------
-app.post('/api/create-order', auth, async (req, res) => {
-  const order = await razor.orders.create({ amount: 19900, currency: 'INR' });
+// ================= PAYMENTS =================
+
+app.post('/api/create-order',auth,async(req,res)=>{
+  const order=await razor.orders.create({amount:19900,currency:'INR'});
   res.json(order);
 });
 
-app.post('/api/verify-payment', auth, (req, res) => {
-  db.prepare('UPDATE users SET plan=? WHERE id=?').run('pro', req.user.id);
-  res.send('Payment success, Pro activated');
+app.post('/api/verify-payment',auth,(req,res)=>{
+  db.prepare('UPDATE users SET plan=? WHERE id=?').run('pro',req.user.id);
+  res.send("Payment success, Pro activated");
 });
 
-// ---------- START SERVER ----------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('Server running on port', PORT);
-});
+// ================= START SERVER =================
+
+const PORT=process.env.PORT || 3000;
+app.listen(PORT,'0.0.0.0',()=>console.log("Server running on port",PORT));
