@@ -9,7 +9,7 @@ const app=express();
 app.use(cors());
 app.use(express.json());
 
-const db=new Database('qr.db');
+const db = new Database('/tmp/qr.db');
 
 // Tables
 db.exec(`CREATE TABLE IF NOT EXISTS users(
@@ -67,4 +67,5 @@ app.get('/api/projects',auth,(req,res)=>{
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
 
