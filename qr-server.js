@@ -267,10 +267,15 @@ app.post("/api/verify-payment",auth,async(req,res)=>{
 app.get("/",(req,res)=>res.send("OK"));
 
 // ================= START SERVER =================
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT;
 
-app.listen(PORT,()=>{
-  console.log("🚀 Server running on port",PORT);
+if (!PORT) {
+  console.error("❌ PORT not provided by Railway");
+  process.exit(1);
+}
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("🚀 Server running on port", PORT);
 });
 
 // ================= SHUTDOWN =================
@@ -279,3 +284,4 @@ process.on("SIGTERM", async ()=>{
   await pool.end();
   process.exit(0);
 });
+
