@@ -153,28 +153,53 @@ app.post('/api/register', async (req,res)=>{
 });
 
 // ================= LOGIN =================
-app.post('/api/login', async (req,res)=>{
-  const {email,password} = req.body;
+app.post('/api/login', async (req, res) => {
+  try {
+    console.log("Incoming login request body:", req.body);
 
-  const result = await pool.query(
-    'SELECT * FROM users WHERE email=$1',
-    [email]
-  );
+    const { email, password } = req.body;
 
-  const user = result.rows[0];
+    if (!email || !password) {
+      console.log("Missing email or password");
+      return res.status(400).send("Missing email or password");
+    }
 
-  if(!user || !bcrypt.compareSync(password,user.password))
-    return res.status(401).send("Invalid credentials");
+    const result = await pool.query(
+      'SELECT * FROM users WHERE email=$1',
+      [email]
+    );
 
-  const token = jwt.sign(
-    {id:user.id,email:user.email,name:user.name},
-    SECRET,
-    {expiresIn:"7d"}
-  );
+    console.log("DB result rows:", result.rows);
 
-  res.json({token,plan:user.plan});
+    if (!result.rows.length) {
+      console.log("User not found");
+      return res.status(401).send("User not found");
+    }
+
+    const user = result.rows[0];
+
+    const passwordMatch = bcrypt.compareSync(password, user.password);
+
+    if (!passwordMatch) {
+      console.log("Invalid password");
+      return res.status(401).send("Invalid password");
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, name: user.name },
+      SECRET,
+      { expiresIn: "7d" }
+    );
+
+    console.log("Login success for:", email);
+
+    res.json({ token, plan: user.plan });
+
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    res.status(500).send("Server error");
+  }
 });
-
 // ================= CHECK EMAIL =================
 app.post('/api/check-email', async (req,res)=>{
   const {email} = req.body;
@@ -269,6 +294,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>{
   console.log("🚀 Server running on port",PORT);
 });
+
 
 
 
