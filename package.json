@@ -2,8 +2,7 @@
   "name": "qrbulkgen-backend",
   "version": "1.0.0",
   "description": "QR Bulk Generator Backend",
-  "main": "qr-server.js",
-  "scripts": {
+    "scripts": {
     "start": "node qr-server.js"
   },
   "engines": {
@@ -18,4 +17,5 @@
   "razorpay": "^2.9.2"
 }
 }
+
 
