@@ -55,7 +55,9 @@ async function initDB() {
 }
 
 initDB();
-
+// ================= CONFIG =================
+const SECRET = process.env.JWT_SECRET || "qrbatch_secret";
+const FREE_LIMIT = 50;
 // ================= AUTH MIDDLEWARE =================
 function auth(req,res,next){
   const token = req.headers.authorization;
@@ -245,4 +247,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>{
   console.log("🚀 Server running on port",PORT);
 });
+
 
