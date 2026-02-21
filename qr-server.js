@@ -279,30 +279,27 @@ app.get("/health", (req, res) => {
 });
 
 // ================= START SERVER =================
-const PORT = process.env.PORT || 8080;
+// ================= START SERVER (RAILWAY SAFE) =================
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("🚀 Server running on port", PORT);
+async function startServer() {
+  try {
+    // Test DB connection
+    await pool.query("SELECT 1");
+    console.log("✅ Postgres connected");
 
-  serverReady = true;
+    // Init tables BEFORE listening
+    await initDB();
 
-  setTimeout(() => {
-    initDB();
-  }, 1000);
-});
+    const PORT = process.env.PORT || 8080;
 
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log("🚀 Server running on port", PORT);
+    });
 
+  } catch (err) {
+    console.error("Startup failed:", err);
+    process.exit(1);
+  }
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+startServer();
