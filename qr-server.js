@@ -55,16 +55,6 @@ console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
   }
 })();
 
-console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
-
-// test connection (non-blocking)
-pool.connect()
-  .then(c => {
-    console.log("✅ Postgres connected");
-    c.release();
-  })
-  .catch(err => console.error("DB connection error:", err));
-
 // ================= CREATE TABLES =================
 async function initDB() {
   try {
@@ -295,6 +285,7 @@ app.listen(PORT, "0.0.0.0", () => {
     initDB();
   }, 1000);
 });
+
 
 
 
