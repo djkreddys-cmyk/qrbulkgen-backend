@@ -41,13 +41,17 @@ app.use(cors({
 // ================= POSTGRES =================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
+  ssl: { rejectUnauthorized: false },
+
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 30000,
 });
 
 console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
+
+pool.on("error", (err) => {
+  console.error("🔥 Unexpected PostgreSQL error:", err);
+});
 
 // ================= CREATE TABLES =================
 async function initDB() {
@@ -280,23 +284,34 @@ if (!PORT) {
   console.error("❌ Railway PORT not provided");
   process.exit(1);
 }
-
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
 
-  // Run DB init AFTER server is reachable
-  try {
-    console.log("Connecting DB...");
-
-    await pool.query("SELECT 1");
-    console.log("✅ Postgres connected");
-
-    await initDB();
-    console.log("✅ Tables ready");
-
-  } catch (err) {
-    console.error("DB startup error:", err);
-  }
+  // Connect DB in background (non-blocking)
+  connectDB();
 });
+
+
+// ================= DB CONNECT FUNCTION =================
+async function connectDB(retries = 5) {
+  while (retries) {
+    try {
+      console.log("Connecting DB...");
+      await pool.query("SELECT 1");
+      console.log("✅ Postgres connected");
+
+      await initDB();
+      console.log("✅ Tables ready");
+      return;
+
+    } catch (err) {
+      console.log("DB retry left:", retries);
+      retries--;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+
+  console.error("❌ Database connection failed after retries");
+}
 
 
