@@ -299,26 +299,21 @@ app.post('/api/verify-payment', auth, async (req,res)=>{
   res.send("Payment success, Pro activated");
 });
 
-// ================= DEBUG USERS =================
-app.get("/api/debug-users", async (req,res)=>{
-  try {
-    const result = await pool.query("SELECT id,email,password FROM users");
-    res.json(result.rows);
-  } catch (err) {
-    console.error("DEBUG USERS ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ================= HEALTH CHECK =================
 app.get('/', (req,res)=>res.send("OK"));
 
 
 // ================= SERVER =================
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
+
+if (!PORT) {
+  console.error("PORT not defined by Railway");
+  process.exit(1);
+}
 app.listen(PORT,'0.0.0.0',()=>{
   console.log("🚀 Server running on port",PORT);
 });
+
 
 
 
