@@ -37,12 +37,14 @@ app.use(cors({
 }));
 
 // ================= DATABASE =================
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL
-    ? { rejectUnauthorized: false }
-    : false,
-});
+(async () => {
+  try {
+    await pool.query("SELECT 1");
+    console.log("✅ Postgres connected");
+  } catch (err) {
+    console.error("DB connection error:", err);
+  }
+})();
 
 console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
 
@@ -284,6 +286,7 @@ app.listen(PORT, "0.0.0.0", () => {
     initDB();
   }, 1000);
 });
+
 
 
 
