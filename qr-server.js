@@ -41,7 +41,10 @@ app.use(cors({
 // ================= POSTGRES =================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
 });
 
 console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
@@ -295,4 +298,5 @@ app.listen(PORT, async () => {
     console.error("DB startup error:", err);
   }
 });
+
 
