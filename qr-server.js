@@ -57,7 +57,6 @@ pool.on("error", (err) => {
 
 async function initDB() {
   try {
-    await pool.query('SELECT 1');
     console.log("✅ Postgres connected");
 
     await pool.query(`
@@ -307,26 +306,7 @@ app.get('/', (req,res)=>res.send("OK"));
 
 // ================= SERVER =================
 const PORT = process.env.PORT || 8080;
-async function startServer() {
-  try {
-    await pool.query("SELECT 1"); // Ensure DB works before starting
-    console.log("✅ Database verified before server start");
 
-    app.listen(PORT, () => {
-      console.log("🚀 Server running on port", PORT);
-    });
-
-  } catch (err) {
-    console.error("❌ Failed to start server due to DB error:", err);
-    process.exit(1);
-  }
-}
-
-startServer();
-
-process.on("SIGTERM", async () => {
-  console.log("SIGTERM received. Closing DB pool...");
-  await pool.end();
-  process.exit(0);
+app.listen(PORT, () => {
+  console.log("🚀 Server running on port", PORT);
 });
-
