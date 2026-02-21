@@ -8,18 +8,28 @@ const { Pool } = require('pg');
 const Razorpay = require('razorpay');
 
 const app = express();
+const allowedOrigins = [
+  "https://qrbulkgen.com",
+  "https://www.qrbulkgen.com",
+  "http://localhost:3000"
+];
+
 app.use(cors({
-  origin: [
-    "https://qrbulkgen.com",
-    "https://www.qrbulkgen.com",
-    "http://localhost:3000"
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
-app.use(express.json());
 
+// VERY IMPORTANT: handle preflight
+app.options("*", cors());
 // ================= POSTGRES CONNECTION =================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -256,6 +266,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>{
   console.log("🚀 Server running on port",PORT);
 });
+
 
 
 
