@@ -280,12 +280,6 @@ app.listen(PORT, "0.0.0.0", () => {
   initDB();
 });
 
-// ================= SHUTDOWN =================
-process.on("SIGTERM", async ()=>{
-  console.log("SIGTERM received");
-  await pool.end();
-  process.exit(0);
-});
 
 
 
