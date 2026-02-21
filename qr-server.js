@@ -286,14 +286,27 @@ app.post('/api/verify-payment', auth, async (req,res)=>{
   res.send("Payment success, Pro activated");
 });
 
+// ================= DEBUG USERS =================
+app.get("/api/debug-users", async (req,res)=>{
+  try {
+    const result = await pool.query("SELECT id,email,password FROM users");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error fetching users");
+  }
+});
+
 // ================= HEALTH CHECK =================
 app.get('/', (req,res)=>res.send("OK"));
+
 
 // ================= SERVER =================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>{
   console.log("🚀 Server running on port",PORT);
 });
+
 
 
 
