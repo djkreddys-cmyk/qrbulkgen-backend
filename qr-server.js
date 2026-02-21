@@ -36,16 +36,16 @@ app.use(cors({
   credentials: true
 }));
 
-// ================= DATABASE =================
-// ================= POSTGRES =================
-const { Pool } = require("pg");
 
+// ================= POSTGRES =================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
-// ✅ DB test AFTER pool exists
+console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
+
+// test DB connection safely
 (async () => {
   try {
     await pool.query("SELECT 1");
@@ -295,6 +295,7 @@ app.listen(PORT, "0.0.0.0", () => {
     initDB();
   }, 1000);
 });
+
 
 
 
