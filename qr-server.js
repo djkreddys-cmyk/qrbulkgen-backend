@@ -45,7 +45,10 @@ app.options("*", cors(corsOptions));
 // ================= POSTGRES CONNECTION =================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 3,                // LIMIT CONNECTIONS
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000
 });
 
 pool.on("error", (err) => {
@@ -321,4 +324,9 @@ async function startServer() {
 
 startServer();
 
+process.on("SIGTERM", async () => {
+  console.log("SIGTERM received. Closing DB pool...");
+  await pool.end();
+  process.exit(0);
+});
 
