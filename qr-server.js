@@ -271,14 +271,11 @@ app.get("/health", (req, res) => {
 });
 
 // ================= START SERVER FIRST =================
-const PORT = process.env.PORT || 8080;
-
 app.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 Server running on port", PORT);
-
-  // Start DB AFTER server is live
   initDB();
 });
+
 
 
 
