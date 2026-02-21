@@ -1,4 +1,13 @@
 // ================= QRBulkGen Backend (FINAL POSTGRES VERSION) =================
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED REJECTION:", reason);
+});
+
+
 
 const express = require('express');
 const cors = require('cors');
@@ -37,6 +46,10 @@ app.options("*", cors(corsOptions));
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
+});
+
+pool.on("error", (err) => {
+  console.error("Unexpected PG pool error:", err);
 });
 
 async function initDB() {
@@ -306,6 +319,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>{
   console.log("🚀 Server running on port",PORT);
 });
+
 
 
 
