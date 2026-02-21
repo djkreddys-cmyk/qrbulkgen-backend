@@ -89,7 +89,6 @@ async function initDB() {
   }
 }
 
-initDB();
 // ================= CONFIG =================
 const SECRET = process.env.JWT_SECRET || "qrbatch_secret";
 const FREE_LIMIT = 50;
@@ -310,17 +309,20 @@ if (!PORT) {
   console.error("PORT not defined by Railway");
   process.exit(1);
 }
-app.listen(PORT,'0.0.0.0',()=>{
-  console.log("🚀 Server running on port",PORT);
-});
 
+async function startServer() {
+  try {
+    await pool.query("SELECT 1"); // Ensure DB works before starting
+    console.log("✅ Database verified before server start");
 
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log("🚀 Server running on port", PORT);
+    });
 
+  } catch (err) {
+    console.error("❌ Failed to start server due to DB error:", err);
+    process.exit(1);
+  }
+}
 
-
-
-
-
-
-
-
+startServer();
