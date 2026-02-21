@@ -270,11 +270,14 @@ app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
 
-// ================= START SERVER =================
-const PORT = 8080;
+// ================= START SERVER FIRST =================
+const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 Server running on port", PORT);
+
+  // Start DB AFTER server is live
+  initDB();
 });
 
 // ================= SHUTDOWN =================
@@ -283,6 +286,7 @@ process.on("SIGTERM", async ()=>{
   await pool.end();
   process.exit(0);
 });
+
 
 
 
