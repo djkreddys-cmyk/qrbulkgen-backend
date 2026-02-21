@@ -17,43 +17,44 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-pool.connect()
-  .then(() => console.log("✅ Postgres connected"))
-  .catch(err => console.error("❌ Postgres connection error:", err));
+async function initDB() {
+  try {
+    await pool.query('SELECT 1');
+    console.log("✅ Postgres connected");
 
-// ================= CONFIG =================
-const SECRET = process.env.JWT_SECRET || "qrbatch_secret";
-const FREE_LIMIT = 50;
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users(
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT UNIQUE,
+        password TEXT,
+        plan TEXT DEFAULT 'free'
+      );
 
-// ================= CREATE TABLES =================
-async function createTables() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users(
-      id SERIAL PRIMARY KEY,
-      name TEXT,
-      email TEXT UNIQUE,
-      password TEXT,
-      plan TEXT DEFAULT 'free'
-    );
+      CREATE TABLE IF NOT EXISTS projects(
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT,
+        data TEXT,
+        created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
 
-    CREATE TABLE IF NOT EXISTS projects(
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      name TEXT,
-      data TEXT,
-      created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+      CREATE TABLE IF NOT EXISTS usage(
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        date TEXT,
+        count INTEGER DEFAULT 0
+      );
+    `);
 
-    CREATE TABLE IF NOT EXISTS usage(
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      date TEXT,
-      count INTEGER DEFAULT 0
-    );
-  `);
-  console.log("✅ Tables ready");
+    console.log("✅ Tables ready");
+
+  } catch (err) {
+    console.error("❌ Database init error:", err.message);
+  }
 }
-createTables();
+
+initDB();
 
 // ================= AUTH MIDDLEWARE =================
 function auth(req,res,next){
@@ -244,3 +245,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>{
   console.log("🚀 Server running on port",PORT);
 });
+
