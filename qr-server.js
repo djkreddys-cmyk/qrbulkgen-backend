@@ -14,7 +14,7 @@ const allowedOrigins = [
   "http://localhost:3000"
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function(origin, callback) {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) {
@@ -26,10 +26,10 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
-}));
+};
 
-// VERY IMPORTANT: handle preflight
-app.options("*", cors());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 // ================= POSTGRES CONNECTION =================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -266,6 +266,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>{
   console.log("🚀 Server running on port",PORT);
 });
+
 
 
 
