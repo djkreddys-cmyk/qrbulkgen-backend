@@ -303,13 +303,7 @@ app.get('/', (req,res)=>res.send("OK"));
 
 
 // ================= SERVER =================
-const PORT = process.env.PORT;
-
-if (!PORT) {
-  console.error("PORT not defined by Railway");
-  process.exit(1);
-}
-
+const PORT = process.env.PORT || 8080;
 async function startServer() {
   try {
     await pool.query("SELECT 1"); // Ensure DB works before starting
@@ -326,4 +320,5 @@ async function startServer() {
 }
 
 startServer();
+
 
