@@ -278,12 +278,7 @@ app.get("/health", (req, res) => {
 
 // ================= START SERVER =================
 
-const PORT = Number(process.env.PORT);
-
-if (!PORT) {
-  console.error("❌ Railway PORT not provided");
-  process.exit(1);
-}
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
 
@@ -313,5 +308,6 @@ async function connectDB(retries = 5) {
 
   console.error("❌ Database connection failed after retries");
 }
+
 
 
