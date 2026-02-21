@@ -1,21 +1,16 @@
 {
   "name": "qrbulkgen-backend",
   "version": "1.0.0",
-  "description": "QR Bulk Generator Backend",
-    "scripts": {
+  "main": "qr-server.js",
+  "scripts": {
     "start": "node qr-server.js"
   },
-  "engines": {
-    "node": "18.x"
-  },
-"dependencies": {
-  "bcryptjs": "^2.4.3",
-  "cors": "^2.8.5",
-  "express": "^4.18.2",
-  "jsonwebtoken": "^9.0.2",
-  "pg": "^8.11.3",
-  "razorpay": "^2.9.2"
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.5",
+    "razorpay": "^2.9.2"
+  }
 }
-}
-
-
