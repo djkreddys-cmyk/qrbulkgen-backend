@@ -264,7 +264,10 @@ app.post("/api/verify-payment",auth,async(req,res)=>{
 });
 
 // ================= HEALTH =================
-app.get("/",(req,res)=>res.send("OK"));
+app.get("/", (req,res)=>res.send("OK"));
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
 
 // ================= START SERVER =================
 const PORT = 8080;
@@ -279,5 +282,6 @@ process.on("SIGTERM", async ()=>{
   await pool.end();
   process.exit(0);
 });
+
 
 
