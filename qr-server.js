@@ -37,6 +37,15 @@ app.use(cors({
 }));
 
 // ================= DATABASE =================
+// ================= POSTGRES =================
+const { Pool } = require("pg");
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+// ✅ DB test AFTER pool exists
 (async () => {
   try {
     await pool.query("SELECT 1");
@@ -286,6 +295,7 @@ app.listen(PORT, "0.0.0.0", () => {
     initDB();
   }, 1000);
 });
+
 
 
 
