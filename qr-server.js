@@ -1,12 +1,12 @@
-// ================= QRBulkGen Backend (Railway Stable Version) =================
+// ================= QRBulkGen Backend (FINAL STABLE VERSION) =================
 
-process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT EXCEPTION:", err);
-});
+process.on("uncaughtException", err =>
+  console.error("UNCAUGHT EXCEPTION:", err)
+);
 
-process.on("unhandledRejection", (reason) => {
-  console.error("UNHANDLED REJECTION:", reason);
-});
+process.on("unhandledRejection", err =>
+  console.error("UNHANDLED REJECTION:", err)
+);
 
 const express = require("express");
 const cors = require("cors");
@@ -28,16 +28,15 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    callback(new Error("Not allowed by CORS"));
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin))
+      return cb(null, true);
+    cb(new Error("Not allowed by CORS"));
   },
   credentials: true
 }));
 
-// ================= POSTGRES =================
+// ================= DATABASE =================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -46,15 +45,15 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000
 });
 
+// test connection (non-blocking)
 pool.connect()
-  .then(client => {
+  .then(c => {
     console.log("✅ Postgres connected");
-    client.release();
+    c.release();
   })
-  .catch(err => {
-    console.error("❌ Postgres connection error:", err);
-  });
+  .catch(err => console.error("DB connection error:", err));
 
+// ================= CREATE TABLES =================
 async function initDB() {
   try {
     await pool.query(`
@@ -90,8 +89,6 @@ async function initDB() {
 
 initDB();
 
-
-
 // ================= CONFIG =================
 const SECRET = process.env.JWT_SECRET || "qrbatch_secret";
 const FREE_LIMIT = 50;
@@ -121,27 +118,26 @@ async function checkFreeLimit(req, res, next) {
     if (!user) return res.status(404).send("User not found");
     if (user.plan === "pro") return next();
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0,10);
 
-    let usageRes = await pool.query(
+    let usage = await pool.query(
       "SELECT * FROM usage WHERE user_id=$1 AND date=$2",
       [req.user.id, today]
     );
 
-    if (usageRes.rows.length === 0) {
+    if (!usage.rows.length) {
       await pool.query(
         "INSERT INTO usage(user_id,date,count) VALUES($1,$2,0)",
         [req.user.id, today]
       );
-      usageRes = { rows: [{ count: 0 }] };
+      usage = { rows:[{count:0}] };
     }
 
-    if (usageRes.rows[0].count >= FREE_LIMIT) {
+    if (usage.rows[0].count >= FREE_LIMIT)
       return res.status(403).json({
-        message: "Daily free limit reached",
-        limit: FREE_LIMIT
+        message:"Daily free limit reached",
+        limit:FREE_LIMIT
       });
-    }
 
     await pool.query(
       "UPDATE usage SET count=count+1 WHERE user_id=$1 AND date=$2",
@@ -150,36 +146,38 @@ async function checkFreeLimit(req, res, next) {
 
     next();
   } catch (err) {
-    console.error("Limit check error:", err);
+    console.error("Limit error:", err);
     res.status(500).send("Server error");
   }
 }
 
 // ================= REGISTER =================
-app.post("/api/register", async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password)
+app.post("/api/register", async (req,res)=>{
+  try{
+    const {name,email,password} = req.body;
+    if(!name || !email || !password)
       return res.status(400).send("Missing fields");
 
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password,10);
 
     await pool.query(
       "INSERT INTO users(name,email,password) VALUES($1,$2,$3)",
-      [name, email, hash]
+      [name,email,hash]
     );
 
     res.send("Registered successfully");
-  } catch {
+  }catch(err){
+    console.error(err);
     res.status(400).send("User already exists");
   }
 });
 
 // ================= LOGIN =================
-app.post("/api/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password)
+app.post("/api/login", async (req,res)=>{
+  try{
+    const {email,password} = req.body;
+
+    if(!email || !password)
       return res.status(400).send("Missing email or password");
 
     const result = await pool.query(
@@ -187,60 +185,60 @@ app.post("/api/login", async (req, res) => {
       [email]
     );
 
-    if (!result.rows.length)
+    if(!result.rows.length)
       return res.status(401).send("User not found");
 
     const user = result.rows[0];
 
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch)
+    if(!user.password)
+      return res.status(500).send("Password missing");
+
+    const match = await bcrypt.compare(password,user.password);
+
+    if(!match)
       return res.status(401).send("Invalid password");
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, name: user.name },
+      {id:user.id,email:user.email,name:user.name},
       SECRET,
-      { expiresIn: "7d" }
+      {expiresIn:"7d"}
     );
 
-    res.json({ token, plan: user.plan });
-  } catch (err) {
-    console.error("Login error:", err);
+    res.json({token,plan:user.plan});
+
+  }catch(err){
+    console.error("LOGIN ERROR:",err);
     res.status(500).send("Server error");
   }
 });
 
 // ================= PROJECTS =================
-app.post("/api/check-limit", auth, checkFreeLimit, (req, res) => {
+app.post("/api/check-limit",auth,checkFreeLimit,(req,res)=>{
   res.send("Allowed");
 });
 
-app.post("/api/projects", auth, async (req, res) => {
-  try {
-    const { name, data } = req.body;
+app.post("/api/projects",auth,async(req,res)=>{
+  try{
+    const {name,data} = req.body;
 
     await pool.query(
       "INSERT INTO projects(user_id,name,data) VALUES($1,$2,$3)",
-      [req.user.id, name, JSON.stringify(data)]
+      [req.user.id,name,JSON.stringify(data)]
     );
 
     res.send("Saved");
-  } catch (err) {
-    console.error("Project save error:", err);
+  }catch(err){
+    console.error(err);
     res.status(500).send("Server error");
   }
 });
 
-app.get("/api/projects", auth, async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT * FROM projects WHERE user_id=$1 ORDER BY created DESC",
-      [req.user.id]
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Project fetch error:", err);
-    res.status(500).send("Server error");
-  }
+app.get("/api/projects",auth,async(req,res)=>{
+  const result = await pool.query(
+    "SELECT * FROM projects WHERE user_id=$1 ORDER BY created DESC",
+    [req.user.id]
+  );
+  res.json(result.rows);
 });
 
 // ================= PAYMENTS =================
@@ -249,36 +247,35 @@ const razor = new Razorpay({
   key_secret: process.env.RAZORPAY_SECRET || "test"
 });
 
-app.post("/api/create-order", auth, async (req, res) => {
+app.post("/api/create-order",auth,async(req,res)=>{
   const order = await razor.orders.create({
-    amount: 19900,
-    currency: "INR"
+    amount:19900,
+    currency:"INR"
   });
   res.json(order);
 });
 
-app.post("/api/verify-payment", auth, async (req, res) => {
+app.post("/api/verify-payment",auth,async(req,res)=>{
   await pool.query(
     "UPDATE users SET plan=$1 WHERE id=$2",
-    ["pro", req.user.id]
+    ["pro",req.user.id]
   );
-  res.send("Payment success, Pro activated");
+  res.send("Payment success");
 });
 
-// ================= HEALTH CHECK =================
-app.get("/", (req, res) => res.send("OK"));
+// ================= HEALTH =================
+app.get("/",(req,res)=>res.send("OK"));
 
-// ================= START SERVER IMMEDIATELY =================
+// ================= START SERVER =================
 const PORT = process.env.PORT || 8080;
 
-app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
+app.listen(PORT,()=>{
+  console.log("🚀 Server running on port",PORT);
 });
 
-// ================= GRACEFUL SHUTDOWN =================
-process.on("SIGTERM", async () => {
-  console.log("SIGTERM received. Closing DB pool...");
+// ================= SHUTDOWN =================
+process.on("SIGTERM", async ()=>{
+  console.log("SIGTERM received");
   await pool.end();
   process.exit(0);
 });
-
