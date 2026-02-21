@@ -269,11 +269,14 @@ app.get("/health", (req, res) => {
 });
 
 
-// ================= START SERVER (RAILWAY SAFE) =================
-
 // ================= START SERVER =================
 
-const PORT = process.env.PORT || 8080;
+const PORT = Number(process.env.PORT);
+
+if (!PORT) {
+  console.error("❌ Railway PORT not provided");
+  process.exit(1);
+}
 
 app.listen(PORT, async () => {
   console.log("🚀 Server running on port", PORT);
@@ -292,3 +295,4 @@ app.listen(PORT, async () => {
     console.error("DB startup error:", err);
   }
 });
+
