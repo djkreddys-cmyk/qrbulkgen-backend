@@ -270,11 +270,12 @@ app.post("/api/verify-payment",auth,async(req,res)=>{
 });
 
 // ================= HEALTH =================
+app.get("/", (req, res) => {
+  res.status(200).send("OK");
+});
+
 app.get("/health", (req, res) => {
-  if (serverReady) {
-    return res.status(200).send("OK");
-  }
-  res.status(503).send("Starting");
+  res.status(200).send("OK");
 });
 
 // ================= START SERVER =================
@@ -289,6 +290,7 @@ app.listen(PORT, "0.0.0.0", () => {
     initDB();
   }, 1000);
 });
+
 
 
 
