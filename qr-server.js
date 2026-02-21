@@ -46,16 +46,6 @@ const pool = new Pool({
 
 console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
 
-// test DB connection safely
-(async () => {
-  try {
-    await pool.query("SELECT 1");
-    console.log("✅ Postgres connected");
-  } catch (err) {
-    console.error("DB connection error:", err);
-  }
-})();
-
 // ================= CREATE TABLES =================
 async function initDB() {
   try {
@@ -303,3 +293,4 @@ async function startServer() {
 }
 
 startServer();
+
