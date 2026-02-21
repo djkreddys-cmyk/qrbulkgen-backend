@@ -57,6 +57,7 @@ pool.connect()
 // ================= CREATE TABLES =================
 async function initDB() {
   try {
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users(
         id SERIAL PRIMARY KEY,
@@ -65,7 +66,9 @@ async function initDB() {
         password TEXT,
         plan TEXT DEFAULT 'free'
       );
+    `);
 
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS projects(
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -73,7 +76,9 @@ async function initDB() {
         data TEXT,
         created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS usage(
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -83,11 +88,11 @@ async function initDB() {
     `);
 
     console.log("✅ Tables ready");
+
   } catch (err) {
     console.error("DB init error:", err);
   }
 }
-
 // ================= CONFIG =================
 const SECRET = process.env.JWT_SECRET || "qrbatch_secret";
 const FREE_LIMIT = 50;
@@ -279,6 +284,7 @@ app.listen(PORT, "0.0.0.0", () => {
     initDB();
   }, 1000);
 });
+
 
 
 
