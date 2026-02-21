@@ -1,4 +1,5 @@
-// ================= QRBulkGen Backend (FINAL POSTGRES VERSION) =================
+// ================= QRBulkGen Backend (Railway Stable Version) =================
+
 process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION:", err);
 });
@@ -7,17 +8,17 @@ process.on("unhandledRejection", (reason) => {
   console.error("UNHANDLED REJECTION:", reason);
 });
 
-
-
-const express = require('express');
-const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
-const Razorpay = require('razorpay');
+const express = require("express");
+const cors = require("cors");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { Pool } = require("pg");
+const Razorpay = require("razorpay");
 
 const app = express();
-app.use(express.json());   // ← THIS MUST BE FIRST
+
+// ================= MIDDLEWARE =================
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const allowedOrigins = [
@@ -26,178 +27,137 @@ const allowedOrigins = [
   "http://localhost:3000"
 ];
 
-const corsOptions = {
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
-    } else {
-      return callback(new Error("Not allowed by CORS"));
     }
+    callback(new Error("Not allowed by CORS"));
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
-};
+}));
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
-// ================= POSTGRES CONNECTION =================
+// ================= POSTGRES =================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  max: 3,                // LIMIT CONNECTIONS
+  max: 3,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000
 });
 
-pool.on("error", (err) => {
-  console.error("Unexpected PG pool error:", err);
-});
-
-async function initDB() {
-  try {
+pool.connect()
+  .then(client => {
     console.log("✅ Postgres connected");
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users(
-        id SERIAL PRIMARY KEY,
-        name TEXT,
-        email TEXT UNIQUE,
-        password TEXT,
-        plan TEXT DEFAULT 'free'
-      );
-
-      CREATE TABLE IF NOT EXISTS projects(
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        name TEXT,
-        data TEXT,
-        created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS usage(
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        date TEXT,
-        count INTEGER DEFAULT 0
-      );
-    `);
-
-    console.log("✅ Tables ready");
-
-  } catch (err) {
-    console.error("❌ Database init error:", err.message);
-  }
-}
+    client.release();
+  })
+  .catch(err => {
+    console.error("❌ Postgres connection error:", err);
+  });
 
 // ================= CONFIG =================
 const SECRET = process.env.JWT_SECRET || "qrbatch_secret";
 const FREE_LIMIT = 50;
-// ================= AUTH MIDDLEWARE =================
-function auth(req,res,next){
-  const token = req.headers.authorization;
-  if(!token) return res.status(401).send("No token");
 
-  try{
+// ================= AUTH =================
+function auth(req, res, next) {
+  const token = req.headers.authorization;
+  if (!token) return res.status(401).send("No token");
+
+  try {
     req.user = jwt.verify(token, SECRET);
     next();
-  }catch{
+  } catch {
     res.status(401).send("Invalid token");
   }
 }
 
-// ================= FREE LIMIT CHECK =================
-async function checkFreeLimit(req,res,next){
-  const userRes = await pool.query(
-    'SELECT plan FROM users WHERE id=$1',
-    [req.user.id]
-  );
+// ================= FREE LIMIT =================
+async function checkFreeLimit(req, res, next) {
+  try {
+    const userRes = await pool.query(
+      "SELECT plan FROM users WHERE id=$1",
+      [req.user.id]
+    );
 
-  const user = userRes.rows[0];
-  if(user.plan === 'pro') return next();
+    const user = userRes.rows[0];
+    if (!user) return res.status(404).send("User not found");
+    if (user.plan === "pro") return next();
 
-  const today = new Date().toISOString().slice(0,10);
+    const today = new Date().toISOString().slice(0, 10);
 
-  let usageRes = await pool.query(
-    'SELECT * FROM usage WHERE user_id=$1 AND date=$2',
-    [req.user.id, today]
-  );
-
-  if(usageRes.rows.length === 0){
-    await pool.query(
-      'INSERT INTO usage(user_id,date,count) VALUES($1,$2,0)',
+    let usageRes = await pool.query(
+      "SELECT * FROM usage WHERE user_id=$1 AND date=$2",
       [req.user.id, today]
     );
-    usageRes = { rows: [{ count: 0 }] };
+
+    if (usageRes.rows.length === 0) {
+      await pool.query(
+        "INSERT INTO usage(user_id,date,count) VALUES($1,$2,0)",
+        [req.user.id, today]
+      );
+      usageRes = { rows: [{ count: 0 }] };
+    }
+
+    if (usageRes.rows[0].count >= FREE_LIMIT) {
+      return res.status(403).json({
+        message: "Daily free limit reached",
+        limit: FREE_LIMIT
+      });
+    }
+
+    await pool.query(
+      "UPDATE usage SET count=count+1 WHERE user_id=$1 AND date=$2",
+      [req.user.id, today]
+    );
+
+    next();
+  } catch (err) {
+    console.error("Limit check error:", err);
+    res.status(500).send("Server error");
   }
-
-  if(usageRes.rows[0].count >= FREE_LIMIT)
-    return res.status(403).json({
-      message:'Daily free limit reached',
-      limit:FREE_LIMIT
-    });
-
-  await pool.query(
-    'UPDATE usage SET count=count+1 WHERE user_id=$1 AND date=$2',
-    [req.user.id, today]
-  );
-
-  next();
 }
 
 // ================= REGISTER =================
-app.post('/api/register', async (req,res)=>{
-  const {name,email,password} = req.body;
+app.post("/api/register", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password)
+      return res.status(400).send("Missing fields");
 
-  if(!name || !email || !password)
-    return res.status(400).send("Missing fields");
+    const hash = await bcrypt.hash(password, 10);
 
-  const hash = await bcrypt.hash(password,10);
-
-  try{
     await pool.query(
-      'INSERT INTO users(name,email,password) VALUES($1,$2,$3)',
-      [name,email,hash]
+      "INSERT INTO users(name,email,password) VALUES($1,$2,$3)",
+      [name, email, hash]
     );
+
     res.send("Registered successfully");
-  }catch{
+  } catch {
     res.status(400).send("User already exists");
   }
 });
 
 // ================= LOGIN =================
-app.post('/api/login', async (req, res) => {
+app.post("/api/login", async (req, res) => {
   try {
-    console.log("Incoming login request body:", req.body);
-
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      console.log("Missing email or password");
+    if (!email || !password)
       return res.status(400).send("Missing email or password");
-    }
 
     const result = await pool.query(
-      'SELECT * FROM users WHERE email=$1',
+      "SELECT * FROM users WHERE email=$1",
       [email]
     );
 
-    console.log("DB result rows:", result.rows);
-
-    if (!result.rows.length) {
-      console.log("User not found");
+    if (!result.rows.length)
       return res.status(401).send("User not found");
-    }
 
     const user = result.rows[0];
 
-    const passwordMatch = bcrypt.compareSync(password, user.password);
-
-    if (!passwordMatch) {
-      console.log("Invalid password");
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch)
       return res.status(401).send("Invalid password");
-    }
 
     const token = jwt.sign(
       { id: user.id, email: user.email, name: user.name },
@@ -205,77 +165,45 @@ app.post('/api/login', async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    console.log("Login success for:", email);
-
     res.json({ token, plan: user.plan });
-
   } catch (err) {
-    console.error("LOGIN ERROR:", err);
+    console.error("Login error:", err);
     res.status(500).send("Server error");
   }
 });
-// ================= CHECK EMAIL =================
-app.post('/api/check-email', async (req,res)=>{
-  const {email} = req.body;
-
-  if(!email) return res.json({exists:false});
-
-  const result = await pool.query(
-    'SELECT id FROM users WHERE email=$1',
-    [email]
-  );
-
-  res.json({exists: result.rows.length > 0});
-});
-
-// ================= RESET PASSWORD =================
-app.post('/api/reset-password', async (req,res)=>{
-  const {email,newPassword} = req.body;
-
-  if(!email || !newPassword)
-    return res.status(400).send("Missing data");
-
-  const check = await pool.query(
-    'SELECT id FROM users WHERE email=$1',
-    [email]
-  );
-
-  if(check.rows.length === 0)
-    return res.status(404).send("Email not registered");
-
-  const hash = await bcrypt.hash(newPassword,10);
-
-  await pool.query(
-    'UPDATE users SET password=$1 WHERE email=$2',
-    [hash,email]
-  );
-
-  res.send("Password updated successfully");
-});
 
 // ================= PROJECTS =================
-app.post('/api/check-limit', auth, checkFreeLimit, (req,res)=>{
+app.post("/api/check-limit", auth, checkFreeLimit, (req, res) => {
   res.send("Allowed");
 });
 
-app.post('/api/projects', auth, async (req,res)=>{
-  const {name,data} = req.body;
+app.post("/api/projects", auth, async (req, res) => {
+  try {
+    const { name, data } = req.body;
 
-  await pool.query(
-    'INSERT INTO projects(user_id,name,data) VALUES($1,$2,$3)',
-    [req.user.id, name, JSON.stringify(data)]
-  );
+    await pool.query(
+      "INSERT INTO projects(user_id,name,data) VALUES($1,$2,$3)",
+      [req.user.id, name, JSON.stringify(data)]
+    );
 
-  res.send("Saved");
+    res.send("Saved");
+  } catch (err) {
+    console.error("Project save error:", err);
+    res.status(500).send("Server error");
+  }
 });
 
-app.get('/api/projects', auth, async (req,res)=>{
-  const result = await pool.query(
-    'SELECT * FROM projects WHERE user_id=$1 ORDER BY created DESC',
-    [req.user.id]
-  );
-
-  res.json(result.rows);
+app.get("/api/projects", auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM projects WHERE user_id=$1 ORDER BY created DESC",
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Project fetch error:", err);
+    res.status(500).send("Server error");
+  }
 });
 
 // ================= PAYMENTS =================
@@ -284,29 +212,35 @@ const razor = new Razorpay({
   key_secret: process.env.RAZORPAY_SECRET || "test"
 });
 
-app.post('/api/create-order', auth, async (req,res)=>{
+app.post("/api/create-order", auth, async (req, res) => {
   const order = await razor.orders.create({
-    amount:19900,
-    currency:'INR'
+    amount: 19900,
+    currency: "INR"
   });
   res.json(order);
 });
 
-app.post('/api/verify-payment', auth, async (req,res)=>{
+app.post("/api/verify-payment", auth, async (req, res) => {
   await pool.query(
-    'UPDATE users SET plan=$1 WHERE id=$2',
-    ['pro', req.user.id]
+    "UPDATE users SET plan=$1 WHERE id=$2",
+    ["pro", req.user.id]
   );
   res.send("Payment success, Pro activated");
 });
 
 // ================= HEALTH CHECK =================
-app.get('/', (req,res)=>res.send("OK"));
+app.get("/", (req, res) => res.send("OK"));
 
-
-// ================= SERVER =================
+// ================= START SERVER IMMEDIATELY =================
 const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, () => {
   console.log("🚀 Server running on port", PORT);
+});
+
+// ================= GRACEFUL SHUTDOWN =================
+process.on("SIGTERM", async () => {
+  console.log("SIGTERM received. Closing DB pool...");
+  await pool.end();
+  process.exit(0);
 });
