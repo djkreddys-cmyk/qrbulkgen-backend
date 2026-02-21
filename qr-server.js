@@ -16,6 +16,7 @@ const { Pool } = require("pg");
 const Razorpay = require("razorpay");
 
 const app = express();
+let serverReady = false;
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
@@ -269,22 +270,24 @@ app.post("/api/verify-payment",auth,async(req,res)=>{
 });
 
 // ================= HEALTH =================
-app.get("/", (req,res)=>res.send("OK"));
 app.get("/health", (req, res) => {
-  res.status(200).send("OK");
+  if (serverReady) {
+    return res.status(200).send("OK");
+  }
+  res.status(503).send("Starting");
 });
 
 // ================= START SERVER =================
-const PORT = process.env.PORT || 8080;
-
 app.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 Server running on port", PORT);
 
-  // initialize DB after server starts
+  serverReady = true;
+
   setTimeout(() => {
     initDB();
   }, 1000);
 });
+
 
 
 
