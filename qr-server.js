@@ -8,6 +8,9 @@ const { Pool } = require('pg');
 const Razorpay = require('razorpay');
 
 const app = express();
+app.use(express.json());   // ← THIS MUST BE FIRST
+app.use(express.urlencoded({ extended: true }));
+
 const allowedOrigins = [
   "https://qrbulkgen.com",
   "https://www.qrbulkgen.com",
@@ -266,6 +269,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT,'0.0.0.0',()=>{
   console.log("🚀 Server running on port",PORT);
 });
+
 
 
 
