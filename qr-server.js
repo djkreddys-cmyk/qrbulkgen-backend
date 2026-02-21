@@ -273,7 +273,11 @@ app.get("/health", (req, res) => {
 // ================= START SERVER FIRST =================
 app.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 Server running on port", PORT);
-  initDB();
+
+  // Run DB init AFTER server fully stabilizes
+  setTimeout(() => {
+    initDB();
+  }, 1000);
 });
 
 
