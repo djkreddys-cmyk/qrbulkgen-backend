@@ -315,7 +315,7 @@ async function startServer() {
     await pool.query("SELECT 1"); // Ensure DB works before starting
     console.log("✅ Database verified before server start");
 
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, () => {
       console.log("🚀 Server running on port", PORT);
     });
 
@@ -326,3 +326,4 @@ async function startServer() {
 }
 
 startServer();
+
