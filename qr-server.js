@@ -268,18 +268,22 @@ app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
 
-// ================= START SERVER =================
+// ================= START SERVER (RAILWAY SAFE) =================
+
 // ================= START SERVER (RAILWAY SAFE) =================
 
 async function startServer() {
   try {
-    // Test DB connection
+    console.log("Starting server...");
+
+    // 1️⃣ Ensure DB works
     await pool.query("SELECT 1");
     console.log("✅ Postgres connected");
 
-    // Init tables BEFORE listening
+    // 2️⃣ Create tables BEFORE server starts
     await initDB();
 
+    // 3️⃣ Start express ONLY after ready
     const PORT = process.env.PORT || 8080;
 
     app.listen(PORT, "0.0.0.0", () => {
@@ -293,4 +297,3 @@ async function startServer() {
 }
 
 startServer();
-
