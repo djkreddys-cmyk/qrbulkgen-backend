@@ -55,6 +55,43 @@ pool.connect()
     console.error("❌ Postgres connection error:", err);
   });
 
+async function initDB() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users(
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT UNIQUE,
+        password TEXT,
+        plan TEXT DEFAULT 'free'
+      );
+
+      CREATE TABLE IF NOT EXISTS projects(
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT,
+        data TEXT,
+        created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS usage(
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        date TEXT,
+        count INTEGER DEFAULT 0
+      );
+    `);
+
+    console.log("✅ Tables ready");
+  } catch (err) {
+    console.error("DB init error:", err);
+  }
+}
+
+initDB();
+
+
+
 // ================= CONFIG =================
 const SECRET = process.env.JWT_SECRET || "qrbatch_secret";
 const FREE_LIMIT = 50;
@@ -244,3 +281,4 @@ process.on("SIGTERM", async () => {
   await pool.end();
   process.exit(0);
 });
+
