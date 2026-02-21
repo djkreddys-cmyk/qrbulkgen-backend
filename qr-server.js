@@ -39,11 +39,12 @@ app.use(cors({
 // ================= DATABASE =================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 3,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000
+  ssl: process.env.DATABASE_URL
+    ? { rejectUnauthorized: false }
+    : false,
 });
+
+console.log("DATABASE_URL exists:", !!process.env.DATABASE_URL);
 
 // test connection (non-blocking)
 pool.connect()
@@ -282,6 +283,7 @@ process.on("SIGTERM", async ()=>{
   await pool.end();
   process.exit(0);
 });
+
 
 
 
