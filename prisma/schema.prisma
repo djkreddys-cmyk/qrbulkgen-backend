@@ -13,3 +13,12 @@ model User {
   name      String?
   createdAt DateTime @default(now())
 }
+
+model QRCode {
+  id          Int      @id @default(autoincrement())
+  type        String
+  shortCode   String   @unique
+  destination String
+  scanCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+}
