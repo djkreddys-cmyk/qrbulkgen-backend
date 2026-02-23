@@ -36,3 +36,20 @@ const start = async () => {
 }
 
 start()
+
+// Create user
+fastify.get("/users", async () => {
+  const users = await prisma.user.findMany()
+  return users
+})
+
+//User deleted
+fastify.delete("/users/:id", async (request) => {
+  const { id } = request.params
+
+  await prisma.user.delete({
+    where: { id: Number(id) }
+  })
+
+  return { message: "User deleted successfully" }
+})
