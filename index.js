@@ -53,3 +53,18 @@ fastify.delete("/users/:id", async (request) => {
 
   return { message: "User deleted successfully" }
 })
+//Update Route
+fastify.put("/users/:id", async (request) => {
+  const { id } = request.params
+  const { email, name } = request.body
+
+  const updatedUser = await prisma.user.update({
+    where: { id: Number(id) },
+    data: {
+      email,
+      name
+    }
+  })
+
+  return updatedUser
+})
