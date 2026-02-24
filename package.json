@@ -6,9 +6,8 @@
    "scripts": {
     "start": "npx prisma migrate deploy && node index.js",
     "postinstall": "prisma generate"
-    }
-  }
-  "keywords": [],
+    },
+    "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
