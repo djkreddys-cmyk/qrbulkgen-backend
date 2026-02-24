@@ -12,6 +12,7 @@ model User {
   email     String   @unique
   name      String?
   createdAt DateTime @default(now())
+  qrCodes   QRCode[]
 }
 
 model QRCode {
@@ -21,4 +22,17 @@ model QRCode {
   destination String
   scanCount   Int      @default(0)
   createdAt   DateTime @default(now())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  scans       QRScan[]
+}
+
+model QRScan {
+  id         Int      @id @default(autoincrement())
+  qrCodeId   Int
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id])
 }
