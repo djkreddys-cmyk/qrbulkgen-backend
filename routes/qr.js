@@ -26,4 +26,24 @@ module.exports = async function (fastify, opts) {
     })
   })
 
+  // ✅ ADD THIS ROUTE
+  fastify.get("/s/:code", async (request, reply) => {
+    const { code } = request.params
+
+    const record = await prisma.qRCode.findUnique({
+      where: { shortCode: code }
+    })
+
+    if (!record) {
+      return reply.code(404).send({ message: "QR not found" })
+    }
+
+    await prisma.qRCode.update({
+      where: { shortCode: code },
+      data: { scanCount: { increment: 1 } }
+    })
+
+    return reply.redirect(record.destination)
+  })
+
 }
