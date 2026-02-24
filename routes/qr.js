@@ -5,13 +5,23 @@ module.exports = async function (fastify, opts) {
   const QRCodeLib = require("qrcode")
   const { nanoid } = require("nanoid")
 
-  fastify.post("/generate-dynamic-qr", async (request) => {
-    const { type, destination } = request.body
+  // 🔹 Generate Single QR
+  fastify.post("/generate-dynamic-qr", async (request, reply) => {
+    const { type, destination, userId } = request.body
 
-    const shortCode = nanoid(6)
+    if (!userId) {
+      return reply.code(400).send({ message: "userId required" })
+    }
+
+    const shortCode = nanoid(8)
 
     await prisma.qRCode.create({
-      data: { type, shortCode, destination }
+      data: {
+        type,
+        shortCode,
+        destination,
+        userId: Number(userId)
+      }
     })
 
     const shortUrl = `${process.env.APP_URL}/s/${shortCode}`
@@ -20,13 +30,15 @@ module.exports = async function (fastify, opts) {
     return { qr: qrImage, shortUrl }
   })
 
+  // 🔹 Stats Route
   fastify.get("/qr/:code/stats", async (request) => {
     return prisma.qRCode.findUnique({
-      where: { shortCode: request.params.code }
+      where: { shortCode: request.params.code },
+      include: { scans: true }
     })
   })
 
-  // ✅ ADD THIS ROUTE
+  // 🔹 Redirect + Analytics
   fastify.get("/s/:code", async (request, reply) => {
     const { code } = request.params
 
@@ -38,12 +50,55 @@ module.exports = async function (fastify, opts) {
       return reply.code(404).send({ message: "QR not found" })
     }
 
+    // Increment counter
     await prisma.qRCode.update({
       where: { shortCode: code },
       data: { scanCount: { increment: 1 } }
     })
 
+    // Save analytics
+    await prisma.qRScan.create({
+      data: {
+        qrCodeId: record.id,
+        ip: request.ip,
+        userAgent: request.headers["user-agent"]
+      }
+    })
+
     return reply.redirect(record.destination)
+  })
+
+  // 🔹 Bulk Generate
+  fastify.post("/bulk-generate", async (request, reply) => {
+    const { links, userId } = request.body
+
+    if (!links || !Array.isArray(links)) {
+      return reply.code(400).send({ message: "links must be an array" })
+    }
+
+    if (!userId) {
+      return reply.code(400).send({ message: "userId is required" })
+    }
+
+    const created = await Promise.all(
+      links.map(async (destination) => {
+        const shortCode = nanoid(8)
+
+        return prisma.qRCode.create({
+          data: {
+            type: "url",
+            shortCode,
+            destination,
+            userId: Number(userId)
+          }
+        })
+      })
+    )
+
+    return {
+      message: "Bulk QR generation successful",
+      count: created.length
+    }
   })
 
 }
