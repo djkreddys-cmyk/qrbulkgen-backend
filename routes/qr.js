@@ -5,31 +5,40 @@ module.exports = async function (fastify, opts) {
   const QRCodeLib = require("qrcode")
   const { nanoid } = require("nanoid")
 
-  // 🔹 Generate Single QR
-  fastify.post("/generate-dynamic-qr", async (request, reply) => {
-    const { type, destination, userId } = request.body
+// 🔹 Generate Single QR
+fastify.post("/generate-dynamic-qr", async (request, reply) => {
+  const { originalUrl, userId } = request.body;
 
-    if (!userId) {
-      return reply.code(400).send({ message: "userId required" })
-    }
+  // ✅ Validation
+  if (!originalUrl) {
+    return reply.code(400).send({ message: "URL is required" });
+  }
 
-    const shortCode = nanoid(8)
+  if (!userId) {
+    return reply.code(400).send({ message: "userId required" });
+  }
 
-    await prisma.qRCode.create({
-      data: {
-        type,
-        shortCode,
-        destination,
-        userId: Number(userId)
-      }
-    })
+  // Optional: ensure URL has protocol
+  const formattedUrl = originalUrl.startsWith("http")
+    ? originalUrl
+    : `https://${originalUrl}`;
 
-    const shortUrl = `${process.env.APP_URL}/s/${shortCode}`
-    const qrImage = await QRCodeLib.toDataURL(shortUrl)
+  const shortCode = nanoid(8);
 
-    return { qr: qrImage, shortUrl }
-  })
+  await prisma.qRCode.create({
+    data: {
+      type: "DYNAMIC",            // Backend decides
+      shortCode,
+      destination: formattedUrl,  // Stored cleanly
+      userId: Number(userId),
+    },
+  });
 
+  const shortUrl = `${process.env.APP_URL}/s/${shortCode}`;
+  const qrImage = await QRCodeLib.toDataURL(shortUrl);
+
+  return { qr: qrImage, shortUrl };
+});
   // 🔹 Stats Route
   fastify.get("/qr/:code/stats", async (request) => {
     return prisma.qRCode.findUnique({
