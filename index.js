@@ -1,6 +1,13 @@
 require("dotenv").config()
 
 const fastify = require("fastify")({ logger: true })
+const cors = require("@fastify/cors");
+
+// ✅ Register CORS FIRST
+fastify.register(cors, {
+  origin: true, // allow all origins (good for development)
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+});
 
 // Register routes
 fastify.register(require("./routes/users"))
