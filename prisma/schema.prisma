@@ -8,36 +8,45 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  plan String @default("FREE")
+  id                   Int       @id @default(autoincrement())
+  name                 String
+  email                String    @unique
+  password             String
+  plan                 String    @default("FREE")
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?
+  subscriptionStatus   String?
+  currentPeriodEnd     DateTime?
 
-  qRCodes   QRCode[]
+  // 🔐 Password Reset Fields
+  resetToken           String?
+  resetTokenExpiry     DateTime?
+
+  qrcodes QRCode[]
+
+  createdAt DateTime @default(now())
 }
 
 model QRCode {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   type        String
-  shortCode   String   @unique
+  shortCode   String    @unique
   destination String
-  scanCount   Int      @default(0)
-  createdAt   DateTime @default(now())
+  scanCount   Int       @default(0)
+  createdAt   DateTime  @default(now())
   userId      Int
   expiresAt   DateTime?
   isActive    Boolean   @default(true)
-  user        User     @relation(fields: [userId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
   scans       QRScan[]
 }
 
 model QRScan {
-  id         Int      @id @default(autoincrement())
-  qrCodeId   Int
-  ip         String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  qrCodeId  Int
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
 
   qrCode QRCode @relation(fields: [qrCodeId], references: [id])
 }

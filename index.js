@@ -25,10 +25,19 @@ fastify.decorate("authenticate", async function (request, reply) {
     reply.code(401).send({ message: "Unauthorized" })
   }
 })
-
+// ✅ Register raw-body plugin BEFORE routes
+fastify.register(require('fastify-raw-body'), {
+  field: 'rawBody',
+  global: false,
+  encoding: false,
+  runFirst: true
+})
 // ✅ Register routes AFTER JWT
 fastify.register(require("./routes/users"))
 fastify.register(require("./routes/qr"))
+fastify.register(require("./routes/billing"), {
+  prefix: "/billing"  // 🔥 VERY IMPORTANT
+})
 
 // Health check
 fastify.get("/", async () => {

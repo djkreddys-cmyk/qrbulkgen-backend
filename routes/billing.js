@@ -2,11 +2,14 @@ const Stripe = require("stripe")
 
 module.exports = async function (fastify, opts) {
 
-  const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
   const { PrismaClient } = require("@prisma/client")
   const prisma = new PrismaClient()
 
-  // Create checkout session
+  // ===============================
+  // 🔹 CREATE CHECKOUT SESSION
+  // ===============================
+
   fastify.post(
     "/create-checkout-session",
     { preHandler: [fastify.authenticate] },
@@ -14,53 +17,146 @@ module.exports = async function (fastify, opts) {
 
       const userId = request.user.userId
 
+      const user = await prisma.user.findUnique({
+        where: { id: userId }
+      })
+
+      let customerId = user.stripeCustomerId
+
+      // If no Stripe customer yet, create one
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email
+        })
+
+        customerId = customer.id
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { stripeCustomerId: customerId }
+        })
+      }
+
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
+        customer: customerId,
         payment_method_types: ["card"],
         line_items: [
           {
             price: process.env.STRIPE_PRICE_ID,
-            quantity: 1,
-          },
+            quantity: 1
+          }
         ],
-        success_url: `${process.env.APP_URL}/dashboard?success=true`,
-        cancel_url: `${process.env.APP_URL}/dashboard?canceled=true`,
-        metadata: {
-          userId: userId.toString()
-        }
+        success_url: "http://localhost:5173/dashboard?success=true",
+        cancel_url: "http://localhost:5173/dashboard?canceled=true"
       })
 
       return { url: session.url }
     }
   )
-  fastify.post("/stripe-webhook", async (request, reply) => {
 
-  const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
-  const sig = request.headers["stripe-signature"]
+  // ===============================
+  // 🔹 BILLING STATUS
+  // ===============================
 
-  let event
+  fastify.get(
+    "/status",
+    { preHandler: [fastify.authenticate] },
+    async (request) => {
 
-  try {
-    event = stripe.webhooks.constructEvent(
-      request.rawBody,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    )
-  } catch (err) {
-    return reply.code(400).send(`Webhook Error: ${err.message}`)
+      const userId = request.user.userId
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          plan: true,
+          stripeSubscriptionId: true
+        }
+      })
+
+      return {
+        plan: user.plan,
+        subscribed: !!user.stripeSubscriptionId
+      }
+    }
+  )
+// ===============================
+// 🔹 STRIPE WEBHOOK (CRITICAL)
+// ===============================
+
+fastify.post(
+  "/webhook",
+  {
+    config: {
+      rawBody: true
+    }
+  },
+  async (request, reply) => {
+
+    let event
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        request.rawBody,
+        request.headers["stripe-signature"],
+        process.env.STRIPE_WEBHOOK_SECRET
+      )
+    } catch (err) {
+      console.error("Webhook signature failed:", err.message)
+      return reply.code(400).send(`Webhook Error: ${err.message}`)
+    }
+
+    // ======================================
+    // ✅ SUBSCRIPTION ACTIVATED (UPGRADE)
+    // ======================================
+    if (event.type === "checkout.session.completed") {
+
+      const session = event.data.object
+      const subscriptionId = session.subscription
+      const customerId = session.customer
+
+      await prisma.user.updateMany({
+        where: { stripeCustomerId: customerId },
+        data: {
+          plan: "PRO",
+          stripeSubscriptionId: subscriptionId
+        }
+      })
+
+      console.log("User upgraded to PRO")
+    }
+
+    // ======================================
+    // 🔴 AUTO DOWNGRADE (CRITICAL)
+    // ======================================
+    if (
+      event.type === "customer.subscription.deleted" ||
+      event.type === "invoice.payment_failed" ||
+      event.type === "customer.subscription.updated"
+    ) {
+
+      const subscription = event.data.object
+
+      // If subscription is canceled or unpaid
+      if (
+        subscription.status === "canceled" ||
+        subscription.status === "unpaid" ||
+        subscription.status === "incomplete_expired"
+      ) {
+
+        await prisma.user.updateMany({
+          where: { stripeSubscriptionId: subscription.id },
+          data: {
+            plan: "FREE",
+            stripeSubscriptionId: null
+          }
+        })
+
+        console.log("User downgraded to FREE")
+      }
+    }
+
+    return reply.send({ received: true })
   }
-
-  // Payment successful
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object
-    const userId = Number(session.metadata.userId)
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { plan: "PRO" }
-    })
-  }
-
-  return reply.send({ received: true })
-})
+)
 }

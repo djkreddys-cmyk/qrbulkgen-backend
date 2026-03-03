@@ -95,8 +95,15 @@ module.exports = async function (fastify, opts) {
   const { code } = request.params
 
   const record = await prisma.qRCode.findUnique({
-    where: { shortCode: code }
-  })
+  where: { shortCode: code },
+  select: {
+    id: true,
+    type: true,
+    destination: true,
+    isActive: true,
+    expiresAt: true
+  }
+})
 
   if (!record) {
     return reply.code(404).send({ message: "QR not found" })
@@ -157,10 +164,16 @@ module.exports = async function (fastify, opts) {
   where: { id: userId }
 })
 
-if (user.plan === "FREE" && links.length > 100) {
-  return reply.code(403).send({
-    message: "Bulk generation is limited for FREE users."
+if (user.plan === "FREE") {
+  const totalExisting = await prisma.qRCode.count({
+    where: { userId }
   })
+
+  if (totalExisting + links.length > 100) {
+    return reply.code(403).send({
+      message: "Free plan limit reached. Upgrade to PRO."
+    })
+  }
 }
       const created = await Promise.all(
       links.map(async (destination) => {
@@ -266,10 +279,11 @@ fastify.put(
 fastify.get(
   "/my-qrs",
   { preHandler: [fastify.authenticate] },
-  async (request, reply) => {
+  async (request) => {
+
     const userId = request.user.userId
     const page = Number(request.query.page) || 1
-    const limit = 100
+    const limit = 5
     const skip = (page - 1) * limit
 
     const qrs = await prisma.qRCode.findMany({
@@ -283,10 +297,33 @@ fastify.get(
       where: { userId }
     })
 
+    const totalScans = await prisma.qRScan.count({
+      where: {
+        qrCode: { userId }
+      }
+    })
+
+    const activeQrs = await prisma.qRCode.count({
+      where: { userId, isActive: true }
+    })
+
+    const expiredQrs = await prisma.qRCode.count({
+      where: {
+        userId,
+        expiresAt: {
+        not: null,
+        lt: new Date()
+        }
+      }
+    })
+
     return {
       page,
       total,
       totalPages: Math.ceil(total / limit),
+      totalScans,
+      activeQrs,
+      expiredQrs,
       data: qrs
     }
   }

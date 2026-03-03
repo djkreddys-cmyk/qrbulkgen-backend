@@ -1,7 +1,6 @@
 module.exports = async function (fastify, opts) {
   const { PrismaClient } = require("@prisma/client")
   const bcrypt = require("bcrypt")
-  const jwt = require("jsonwebtoken")
   const prisma = new PrismaClient()
 
   // 🔹 CREATE USER (basic)
@@ -14,12 +13,32 @@ module.exports = async function (fastify, opts) {
   })
 
   // 🔹 GET ALL USERS
-  fastify.get("/users", async () => {
-    return await prisma.user.findMany()
-  })
+  fastify.get(
+  "/users",
+  { preHandler: [fastify.authenticate] },
+  async (request, reply) => {
+
+    // Optional: admin-only protection
+    // if (request.user.role !== "admin") {
+    //   return reply.code(403).send({ message: "Forbidden" })
+    // }
+
+    return await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true
+      }
+    })
+  }
+)
 
   // 🔹 UPDATE USER
-  fastify.put("/users/:id", async (request) => {
+  fastify.put(
+  "/users/:id",
+  { preHandler: [fastify.authenticate] },
+  async (request) => {
     const { id } = request.params
     const { email, name } = request.body
 
@@ -27,17 +46,6 @@ module.exports = async function (fastify, opts) {
       where: { id: Number(id) },
       data: { email, name }
     })
-  })
-
-  // 🔹 DELETE USER
-  fastify.delete("/users/:id", async (request) => {
-    const { id } = request.params
-
-    await prisma.user.delete({
-      where: { id: Number(id) }
-    })
-
-    return { message: "User deleted successfully" }
   })
 
   // 🔥 REGISTER USER (secure with password)
@@ -97,13 +105,43 @@ module.exports = async function (fastify, opts) {
     }
 
     const token = fastify.jwt.sign(
-      { userId: user.id },
-      { expiresIn: "7d" }
-    )
+  {
+    userId: user.id,
+    email: user.email,
+    role: user.role || "user",
+  },
+  { expiresIn: "7d" }
+)
 
     return {
-      message: "Login successful",
-      token
+  message: "Login successful",
+  token,
+  user: {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role
+  }
+}
+fastify.get(
+    "/me",
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const userId = request.user.userId
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          plan: true,
+          stripeCustomerId: true,
+          stripeSubscriptionId: true
+        }
+      })
+
+      return user
     }
-  })
+  )
+
 }
