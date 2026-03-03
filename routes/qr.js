@@ -174,3 +174,38 @@ fastify.get("/s/:code", async (request, reply) => {
   })
 
 }
+const bcrypt = require("bcrypt");
+
+fastify.post("/register", async (request, reply) => {
+  const { name, email, password } = request.body;
+
+  if (!name || !email || !password) {
+    return reply.code(400).send({ message: "All fields required" });
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (existingUser) {
+    return reply.code(400).send({ message: "Email already exists" });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      name,
+      email,
+      password: hashedPassword,
+    },
+  });
+
+  return {
+    message: "User created successfully",
+    user: {
+      id: user.id,
+      email: user.email,
+    },
+  };
+});

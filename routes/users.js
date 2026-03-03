@@ -38,3 +38,46 @@ module.exports = async function (fastify, opts) {
     })
   })
 }
+
+const bcrypt = require("bcrypt")
+const { PrismaClient } = require("@prisma/client")
+const prisma = new PrismaClient()
+
+module.exports = async function (fastify, opts) {
+
+  // 🔥 REGISTER USER
+  fastify.post("/register", async (request, reply) => {
+    const { name, email, password } = request.body
+
+    if (!name || !email || !password) {
+      return reply.code(400).send({ message: "All fields required" })
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    })
+
+    if (existingUser) {
+      return reply.code(400).send({ message: "Email already exists" })
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword
+      }
+    })
+
+    return {
+      message: "User created successfully",
+      user: {
+        id: user.id,
+        email: user.email
+      }
+    }
+  })
+
+}
