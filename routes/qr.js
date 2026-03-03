@@ -7,37 +7,61 @@ module.exports = async function (fastify, opts) {
 
 // 🔹 Generate Single QR
 fastify.post("/generate-dynamic-qr", async (request, reply) => {
-  const { originalUrl, userId } = request.body;
+  const { type, data, userId } = request.body;
 
-  // ✅ Validation
-  if (!originalUrl) {
-    return reply.code(400).send({ message: "URL is required" });
+  if (!type) {
+    return reply.code(400).send({ message: "Type is required" });
   }
 
   if (!userId) {
     return reply.code(400).send({ message: "userId required" });
   }
 
-  // Optional: ensure URL has protocol
-  const formattedUrl = originalUrl.startsWith("http")
-    ? originalUrl
-    : `https://${originalUrl}`;
+  let formattedValue;
+
+  switch (type) {
+    case "URL":
+      formattedValue = data.url;
+      if (!formattedValue.startsWith("http")) {
+        formattedValue = `https://${formattedValue}`;
+      }
+      break;
+
+    case "TEXT":
+      formattedValue = data.text;
+      break;
+
+    case "EMAIL":
+      formattedValue = `mailto:${data.email}`;
+      break;
+
+    case "WHATSAPP":
+      formattedValue = `https://wa.me/${data.phone}`;
+      break;
+
+    case "PHONE":
+      formattedValue = `tel:${data.phone}`;
+      break;
+
+    default:
+      return reply.code(400).send({ message: "Invalid QR type" });
+  }
 
   const shortCode = nanoid(8);
 
   await prisma.qRCode.create({
     data: {
-      type: "DYNAMIC",            // Backend decides
+      type,
       shortCode,
-      destination: formattedUrl,  // Stored cleanly
+      destination: formattedValue,
       userId: Number(userId),
     },
   });
 
   const shortUrl = `${process.env.APP_URL}/s/${shortCode}`;
-  const qrImage = await QRCodeLib.toDataURL(shortUrl);
+  const qr = await QRCodeLib.toDataURL(shortUrl);
 
-  return { qr: qrImage, shortUrl };
+  return { qr, shortUrl };
 });
   // 🔹 Stats Route
   fastify.get("/qr/:code/stats", async (request) => {
