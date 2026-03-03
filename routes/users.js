@@ -1,8 +1,10 @@
 module.exports = async function (fastify, opts) {
   const { PrismaClient } = require("@prisma/client")
+  const bcrypt = require("bcrypt")
+
   const prisma = new PrismaClient()
 
-  // Create user
+  // 🔹 CREATE USER (basic)
   fastify.post("/users", async (request) => {
     const { email, name } = request.body
 
@@ -11,12 +13,23 @@ module.exports = async function (fastify, opts) {
     })
   })
 
-  // Get all users
+  // 🔹 GET ALL USERS
   fastify.get("/users", async () => {
     return await prisma.user.findMany()
   })
 
-  // Delete user
+  // 🔹 UPDATE USER
+  fastify.put("/users/:id", async (request) => {
+    const { id } = request.params
+    const { email, name } = request.body
+
+    return await prisma.user.update({
+      where: { id: Number(id) },
+      data: { email, name }
+    })
+  })
+
+  // 🔹 DELETE USER
   fastify.delete("/users/:id", async (request) => {
     const { id } = request.params
 
@@ -27,25 +40,7 @@ module.exports = async function (fastify, opts) {
     return { message: "User deleted successfully" }
   })
 
-  // Update user
-  fastify.put("/users/:id", async (request) => {
-    const { id } = request.params
-    const { email, name } = request.body
-
-    return await prisma.user.update({
-      where: { id: Number(id) },
-      data: { email, name }
-    })
-  })
-}
-
-const bcrypt = require("bcrypt")
-const { PrismaClient } = require("@prisma/client")
-const prisma = new PrismaClient()
-
-module.exports = async function (fastify, opts) {
-
-  // 🔥 REGISTER USER
+  // 🔥 REGISTER USER (secure with password)
   fastify.post("/register", async (request, reply) => {
     const { name, email, password } = request.body
 
@@ -79,5 +74,4 @@ module.exports = async function (fastify, opts) {
       }
     }
   })
-
 }
