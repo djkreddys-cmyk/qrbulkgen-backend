@@ -74,4 +74,37 @@ module.exports = async function (fastify, opts) {
       }
     }
   })
+  // 🔐 LOGIN
+  fastify.post("/login", async (request, reply) => {
+    const { email, password } = request.body
+
+    if (!email || !password) {
+      return reply.code(400).send({ message: "Email and password required" })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email }
+    })
+
+    if (!user) {
+      return reply.code(400).send({ message: "Invalid credentials" })
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password)
+
+    if (!isMatch) {
+      return reply.code(400).send({ message: "Invalid credentials" })
+    }
+
+    const token = jwt.sign(
+      { userId: user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    )
+
+    return {
+      message: "Login successful",
+      token
+    }
+  })
 }
