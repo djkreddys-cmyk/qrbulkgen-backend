@@ -1,15 +1,31 @@
 require("dotenv").config()
 
 const fastify = require("fastify")({ logger: true })
-const cors = require("@fastify/cors");
+const cors = require("@fastify/cors")
 
-// ✅ Register CORS FIRST
+// ✅ CORS
 fastify.register(cors, {
-  origin: true, // allow all origins (good for development)
+  origin: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-});
+})
 
-// Register routes
+// ✅ JWT
+const jwt = require("@fastify/jwt")
+
+fastify.register(jwt, {
+  secret: process.env.JWT_SECRET
+})
+
+// ✅ ADD THIS (VERY IMPORTANT)
+fastify.decorate("authenticate", async function (request, reply) {
+  try {
+    await request.jwtVerify()
+  } catch (err) {
+    reply.code(401).send({ message: "Unauthorized" })
+  }
+})
+
+// ✅ Register routes AFTER JWT
 fastify.register(require("./routes/users"))
 fastify.register(require("./routes/qr"))
 
@@ -22,7 +38,7 @@ const start = async () => {
   try {
     await fastify.listen({
       port: process.env.PORT || 3000,
-      host: "0.0.0.0"
+      host: "0.0.0.0",
     })
 
     console.log("Server running 🚀")

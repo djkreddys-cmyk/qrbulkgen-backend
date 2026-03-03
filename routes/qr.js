@@ -7,8 +7,12 @@ module.exports = async function (fastify, opts) {
   const bcrypt = require("bcrypt")
 
   // 🔹 Generate QR
-  fastify.post("/generate-dynamic-qr", async (request, reply) => {
-    const { type, data, userId } = request.body
+  fastify.post(
+  "/generate-dynamic-qr",
+  { preHandler: [fastify.authenticate] },
+  async (request, reply) => {
+    const { type, data } = request.body
+    const userId = request.user.userId
 
     if (!type) return reply.code(400).send({ message: "Type is required" })
     if (!userId) return reply.code(400).send({ message: "userId required" })

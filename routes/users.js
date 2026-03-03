@@ -96,9 +96,8 @@ module.exports = async function (fastify, opts) {
       return reply.code(400).send({ message: "Invalid credentials" })
     }
 
-    const token = jwt.sign(
+    const token = fastify.jwt.sign(
       { userId: user.id },
-      process.env.JWT_SECRET,
       { expiresIn: "7d" }
     )
 
