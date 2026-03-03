@@ -11,20 +11,50 @@ module.exports = async function (fastify, opts) {
   "/generate-dynamic-qr",
   { preHandler: [fastify.authenticate] },
   async (request, reply) => {
-    const { type, data } = request.body
+
+    const { type, data, expiresAt } = request.body
     const userId = request.user.userId
 
-    if (!type) return reply.code(400).send({ message: "Type is required" })
-    if (!userId) return reply.code(400).send({ message: "userId required" })
+    // Get user ONCE
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    })
+
+    if (!user) {
+      return reply.code(404).send({ message: "User not found" })
+    }
+
+    // 🔒 Expiry is PRO only
+    if (expiresAt && user.plan === "FREE") {
+      return reply.code(403).send({
+        message: "Expiry feature is available only for PRO users."
+      })
+    }
+
+    // 📊 Free plan QR limit
+    if (user.plan === "FREE") {
+      const qrCount = await prisma.qRCode.count({
+        where: { userId }
+      })
+
+      if (qrCount >= 100) {
+        return reply.code(403).send({
+          message: "Free plan limit reached. Upgrade to PRO."
+        })
+      }
+    }
+
+    if (!type) {
+      return reply.code(400).send({ message: "Type is required" })
+    }
 
     let formattedValue
 
     switch (type) {
       case "URL":
-        formattedValue = data.url
-        if (!formattedValue.startsWith("http")) {
-          formattedValue = `https://${formattedValue}`
-        }
+        formattedValue = data.url.startsWith("http")
+          ? data.url
+          : `https://${data.url}`
         break
       case "TEXT":
         formattedValue = data.text
@@ -49,53 +79,68 @@ module.exports = async function (fastify, opts) {
         type,
         shortCode,
         destination: formattedValue,
-        userId: Number(userId),
-      },
+        userId,
+        expiresAt: expiresAt ? new Date(expiresAt) : null
+      }
     })
 
     const shortUrl = `${process.env.APP_URL}/s/${shortCode}`
     const qr = await QRCodeLib.toDataURL(shortUrl)
 
     return { qr, shortUrl }
-  })
-
+  }
+)
     // 🔹 Redirect
   fastify.get("/s/:code", async (request, reply) => {
-    const { code } = request.params
+  const { code } = request.params
 
-    const record = await prisma.qRCode.findUnique({
-      where: { shortCode: code }
-    })
-
-    if (!record) {
-      return reply.code(404).send({ message: "QR not found" })
-    }
-
-    await prisma.qRCode.update({
-      where: { shortCode: code },
-      data: { scanCount: { increment: 1 } }
-    })
-
-    await prisma.qRScan.create({
-      data: {
-        qrCodeId: record.id,
-        ip: request.ip,
-        userAgent: request.headers["user-agent"]
-      }
-    })
-
-    if (record.type === "TEXT") {
-      return reply.type("text/html").send(`
-        <html>
-        <body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:Arial;">
-          <h2>${record.destination}</h2>
-        </body>
-        </html>
-      `)
-    }
-
-    return reply.redirect(record.destination)
+  const record = await prisma.qRCode.findUnique({
+    where: { shortCode: code }
   })
+
+  if (!record) {
+    return reply.code(404).send({ message: "QR not found" })
+  }
+
+  // 🔒 Check if manually disabled
+  if (!record.isActive) {
+    return reply.code(410).send({ message: "QR is disabled" })
+  }
+
+  // ⏳ Check expiry time
+  if (record.expiresAt && new Date() > new Date(record.expiresAt)) {
+    return reply.code(410).send({ message: "QR expired" })
+  }
+
+  // 📊 Increment scan count
+  await prisma.qRCode.update({
+    where: { shortCode: code },
+    data: { scanCount: { increment: 1 } }
+  })
+
+  // 📈 Save analytics
+  await prisma.qRScan.create({
+    data: {
+      qrCodeId: record.id,
+      ip: request.ip,
+      userAgent: request.headers["user-agent"]
+    }
+  })
+
+  // 📝 TEXT special render
+  if (record.type === "TEXT") {
+    return reply.type("text/html").send(`
+      <html>
+      <body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:Arial;">
+        <h2>${record.destination}</h2>
+      </body>
+      </html>
+    `)
+  }
+
+  // 🌍 Default redirect
+  return reply.redirect(record.destination)
+})
 
   // 🔹 Bulk
   fastify.post(
@@ -108,7 +153,15 @@ module.exports = async function (fastify, opts) {
     if (!links || !Array.isArray(links)) {
       return reply.code(400).send({ message: "links must be an array" })
     }
+    const user = await prisma.user.findUnique({
+  where: { id: userId }
+})
 
+if (user.plan === "FREE" && links.length > 100) {
+  return reply.code(403).send({
+    message: "Bulk generation is limited for FREE users."
+  })
+}
       const created = await Promise.all(
       links.map(async (destination) => {
         const shortCode = nanoid(8)
@@ -216,7 +269,7 @@ fastify.get(
   async (request, reply) => {
     const userId = request.user.userId
     const page = Number(request.query.page) || 1
-    const limit = 5
+    const limit = 100
     const skip = (page - 1) * limit
 
     const qrs = await prisma.qRCode.findMany({

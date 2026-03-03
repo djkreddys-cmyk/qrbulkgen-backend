@@ -2,6 +2,7 @@ require("dotenv").config()
 
 const fastify = require("fastify")({ logger: true })
 const cors = require("@fastify/cors")
+fastify.register(require("./routes/billing"))
 
 // ✅ CORS
 fastify.register(cors, {
