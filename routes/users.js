@@ -1,6 +1,7 @@
 module.exports = async function (fastify, opts) {
 
   const bcrypt = require("bcrypt")
+  const crypto = require("crypto")
   const prisma = require("../lib/prisma")
 
   // 🔹 UPDATE USER
@@ -123,5 +124,76 @@ module.exports = async function (fastify, opts) {
       })
     }
   )
+fastify.post("/forgot-password", async (request, reply) => {
 
+  const { email } = request.body
+
+  if (!email) {
+    return reply.code(400).send({ message: "Email is required" })
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email }
+  })
+
+  if (!user) {
+    return { message: "If email exists, reset link sent" }
+  }
+
+  const token = crypto.randomBytes(32).toString("hex")
+
+  await prisma.user.update({
+    where: { email },
+    data: {
+      resetToken: token,
+      resetTokenExpiry: new Date(Date.now() + 3600000) // 1 hour
+    }
+  })
+  const resetLink = `https://qrbulkgen.com/reset-password/${token}`
+
+  return {
+    message: "Password reset link generated",
+    resetLink
+  }
+})
+  return {
+    message: "Password reset link sent"
+  }
+})
+fastify.post("/reset-password", async (request, reply) => {
+
+  const { token, password } = request.body
+
+  if (!token || !password) {
+    return reply.code(400).send({ message: "Invalid request" })
+  }
+
+  const user = await prisma.user.findFirst({
+    where: {
+      resetToken: token,
+      resetTokenExpiry: {
+        gt: new Date()
+      }
+    }
+  })
+
+  if (!user) {
+    return reply.code(400).send({ message: "Invalid or expired token" })
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10)
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+      resetToken: null,
+      resetTokenExpiry: null
+    }
+  })
+
+  return {
+    message: "Password updated successfully"
+  }
+})
 }
