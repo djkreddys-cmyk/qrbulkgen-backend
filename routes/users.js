@@ -3,7 +3,7 @@ module.exports = async function (fastify, opts) {
   const bcrypt = require("bcrypt")
   const prisma = new PrismaClient()
 
-  // 🔹 CREATE USER (basic)
+  // 🔹 CREATE USER
   fastify.post("/users", async (request) => {
     const { email, name } = request.body
 
@@ -12,43 +12,38 @@ module.exports = async function (fastify, opts) {
     })
   })
 
-  // 🔹 GET ALL USERS
+  // 🔹 GET ALL USERS (Protected)
   fastify.get(
-  "/users",
-  { preHandler: [fastify.authenticate] },
-  async (request, reply) => {
-
-    // Optional: admin-only protection
-    // if (request.user.role !== "admin") {
-    //   return reply.code(403).send({ message: "Forbidden" })
-    // }
-
-    return await prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        createdAt: true
-      }
-    })
-  }
-)
+    "/users",
+    { preHandler: [fastify.authenticate] },
+    async () => {
+      return await prisma.user.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          createdAt: true
+        }
+      })
+    }
+  )
 
   // 🔹 UPDATE USER
   fastify.put(
-  "/users/:id",
-  { preHandler: [fastify.authenticate] },
-  async (request) => {
-    const { id } = request.params
-    const { email, name } = request.body
+    "/users/:id",
+    { preHandler: [fastify.authenticate] },
+    async (request) => {
+      const { id } = request.params
+      const { email, name } = request.body
 
-    return await prisma.user.update({
-      where: { id: Number(id) },
-      data: { email, name }
-    })
-  })
+      return await prisma.user.update({
+        where: { id: Number(id) },
+        data: { email, name }
+      })
+    }
+  )
 
-  // 🔥 REGISTER USER (secure with password)
+  // 🔥 REGISTER USER
   fastify.post("/register", async (request, reply) => {
     const { name, email, password } = request.body
 
@@ -82,6 +77,7 @@ module.exports = async function (fastify, opts) {
       }
     }
   })
+
   // 🔐 LOGIN
   fastify.post("/login", async (request, reply) => {
     const { email, password } = request.body
@@ -105,28 +101,31 @@ module.exports = async function (fastify, opts) {
     }
 
     const token = fastify.jwt.sign(
-  {
-    userId: user.id,
-    email: user.email,
-    role: user.role || "user",
-  },
-  { expiresIn: "7d" }
-)
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role || "user"
+      },
+      { expiresIn: "7d" }
+    )
 
     return {
-  message: "Login successful",
-  token,
-  user: {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role
-  }
-}
-fastify.get(
+      message: "Login successful",
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    }
+  })
+
+  // 🔐 GET CURRENT USER
+  fastify.get(
     "/me",
     { preHandler: [fastify.authenticate] },
-    async (request, reply) => {
+    async (request) => {
       const userId = request.user.userId
 
       const user = await prisma.user.findUnique({
@@ -143,5 +142,4 @@ fastify.get(
       return user
     }
   )
-
 }
