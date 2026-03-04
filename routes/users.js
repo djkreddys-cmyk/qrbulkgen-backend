@@ -1,41 +1,31 @@
 module.exports = async function (fastify, opts) {
-  const { PrismaClient } = require("@prisma/client")
+
   const bcrypt = require("bcrypt")
   const prisma = require("../lib/prisma")
-
-  // 🔹 GET ALL USERS (Protected)
-  fastify.get(
-    "/users",
-    { preHandler: [fastify.authenticate] },
-    async () => {
-      return await prisma.user.findMany({
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          createdAt: true
-        }
-      })
-    }
-  )
 
   // 🔹 UPDATE USER
   fastify.put(
     "/users/:id",
     { preHandler: [fastify.authenticate] },
-    async (request) => {
-      const { id } = request.params
-      const { email, name } = request.body
+    async (request, reply) => {
 
-      return await prisma.user.update({
+      const { id } = request.params
+      const { name } = request.body
+
+      if (Number(id) !== request.user.userId) {
+        return reply.code(403).send({ message: "Forbidden" })
+      }
+
+      return prisma.user.update({
         where: { id: Number(id) },
-        data: { email, name }
+        data: { name }
       })
     }
   )
 
   // 🔥 REGISTER USER
   fastify.post("/register", async (request, reply) => {
+
     const { name, email, password } = request.body
 
     if (!name || !email || !password) {
@@ -71,6 +61,7 @@ module.exports = async function (fastify, opts) {
 
   // 🔐 LOGIN
   fastify.post("/login", async (request, reply) => {
+
     const { email, password } = request.body
 
     if (!email || !password) {
@@ -107,28 +98,30 @@ module.exports = async function (fastify, opts) {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role
+        plan: user.plan
       }
     }
   })
 
-fastify.get(
-"/users",
-{ preHandler: [fastify.authenticate] },
-async (request, reply) => {
+  // 🔐 GET CURRENT USER
+  fastify.get(
+    "/me",
+    { preHandler: [fastify.authenticate] },
+    async (request) => {
 
-if (request.user.role !== "admin") {
-return reply.code(403).send({ message: "Forbidden" })
-}
+      const userId = request.user.userId
 
-return prisma.user.findMany({
-select:{
-id:true,
-name:true,
-email:true,
-createdAt:true
-}
-})
-}
-)
+      return prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          plan: true,
+          createdAt: true
+        }
+      })
+    }
+  )
+
 }
