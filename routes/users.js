@@ -1,16 +1,7 @@
 module.exports = async function (fastify, opts) {
   const { PrismaClient } = require("@prisma/client")
   const bcrypt = require("bcrypt")
-  const prisma = new PrismaClient()
-
-  // 🔹 CREATE USER
-  fastify.post("/users", async (request) => {
-    const { email, name } = request.body
-
-    return await prisma.user.create({
-      data: { email, name }
-    })
-  })
+  const prisma = require("../lib/prisma")
 
   // 🔹 GET ALL USERS (Protected)
   fastify.get(
@@ -104,7 +95,7 @@ module.exports = async function (fastify, opts) {
       {
         userId: user.id,
         email: user.email,
-        role: user.role || "user"
+        role: "user"
       },
       { expiresIn: "7d" }
     )
@@ -121,25 +112,23 @@ module.exports = async function (fastify, opts) {
     }
   })
 
-  // 🔐 GET CURRENT USER
-  fastify.get(
-    "/me",
-    { preHandler: [fastify.authenticate] },
-    async (request) => {
-      const userId = request.user.userId
+fastify.get(
+"/users",
+{ preHandler: [fastify.authenticate] },
+async (request, reply) => {
 
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          email: true,
-          plan: true,
-          stripeCustomerId: true,
-          stripeSubscriptionId: true
-        }
-      })
+if (request.user.role !== "admin") {
+return reply.code(403).send({ message: "Forbidden" })
+}
 
-      return user
-    }
-  )
+return prisma.user.findMany({
+select:{
+id:true,
+name:true,
+email:true,
+createdAt:true
+}
+})
+}
+)
 }
