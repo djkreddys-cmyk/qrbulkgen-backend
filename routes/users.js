@@ -156,10 +156,7 @@ fastify.post("/forgot-password", async (request, reply) => {
     resetLink
   }
 })
-  return {
-    message: "Password reset link sent"
-  }
-})
+  
 fastify.post("/reset-password", async (request, reply) => {
 
   const { token, password } = request.body
