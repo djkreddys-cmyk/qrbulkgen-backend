@@ -153,7 +153,7 @@ fastify.post("/forgot-password", async (request, reply) => {
   })
   const resetLink = `https://qrbulkgen.com/reset-password/${token}`
   await resend.emails.send({
-  from: "QRBulkGen <noreply@qrbulkgen.com>",
+  from: "QRBulkGen <noreply@mail.qrbulkgen.com>",
   to: email,
   subject: "Reset your password",
   html: `
