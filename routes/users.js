@@ -164,7 +164,7 @@ fastify.post("/forgot-password", async (request, reply) => {
 })
 
   return {
-    message: "Password reset link generated",
+    message: "Password reset link generated and sent to email",
     resetLink
   }
 })
