@@ -3,6 +3,8 @@ module.exports = async function (fastify, opts) {
   const bcrypt = require("bcrypt")
   const crypto = require("crypto")
   const prisma = require("../lib/prisma")
+  const { Resend } = require("resend")
+  const resend = new Resend(process.env.RESEND_API_KEY)
 
   // 🔹 UPDATE USER
   fastify.put(
@@ -150,6 +152,16 @@ fastify.post("/forgot-password", async (request, reply) => {
     }
   })
   const resetLink = `https://qrbulkgen.com/reset-password/${token}`
+  await resend.emails.send({
+  from: "QRBulkGen <noreply@qrbulkgen.com>",
+  to: email,
+  subject: "Reset your password",
+  html: `
+    <h2>Reset your password</h2>
+    <p>Click below to reset your password:</p>
+    <a href="${resetLink}">${resetLink}</a>
+  `
+})
 
   return {
     message: "Password reset link generated",
