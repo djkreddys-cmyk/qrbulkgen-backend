@@ -7,46 +7,87 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id                   Int       @id @default(autoincrement())
-  name                 String
-  email                String    @unique
-  password             String
-  plan                 String    @default("FREE")
-  stripeCustomerId     String?   @unique
-  stripeSubscriptionId String?
-  subscriptionStatus   String?
-  currentPeriodEnd     DateTime?
-
-  // 🔐 Password Reset Fields
-  resetToken           String?
-  resetTokenExpiry     DateTime?
-
-  qrcodes QRCode[]
-
-  createdAt DateTime @default(now())
+model bulk_jobs {
+  id           String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspace_id String?     @db.Uuid
+  file_name    String?
+  total_qr     Int?
+  status       String?     @default("processing")
+  created_at   DateTime?   @default(now()) @db.Timestamp(6)
+  workspaces   workspaces? @relation(fields: [workspace_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
-model QRCode {
-  id          Int       @id @default(autoincrement())
-  type        String
-  shortCode   String    @unique
-  destination String
-  scanCount   Int       @default(0)
-  createdAt   DateTime  @default(now())
-  userId      Int
-  expiresAt   DateTime?
-  isActive    Boolean   @default(true)
-  user        User      @relation(fields: [userId], references: [id])
-  scans       QRScan[]
+model campaigns {
+  id           String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspace_id String?     @db.Uuid
+  name         String
+  created_at   DateTime?   @default(now()) @db.Timestamp(6)
+  workspaces   workspaces? @relation(fields: [workspace_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  qrcodes      qrcodes[]
 }
 
-model QRScan {
-  id        Int      @id @default(autoincrement())
-  qrCodeId  Int
-  ip        String?
-  userAgent String?
-  createdAt DateTime @default(now())
+model qr_redirect_logs {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  qr_id        String?   @db.Uuid
+  redirect_url String?
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  qrcodes      qrcodes?  @relation(fields: [qr_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
 
-  qrCode QRCode @relation(fields: [qrCodeId], references: [id])
+model qrcodes {
+  id               String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspace_id     String?            @db.Uuid
+  campaign_id      String?            @db.Uuid
+  type             String
+  title            String?
+  short_code       String             @unique
+  target_url       String?
+  data             Json?
+  is_dynamic       Boolean?           @default(true)
+  is_active        Boolean?           @default(true)
+  expires_at       DateTime?          @db.Timestamp(6)
+  created_at       DateTime?          @default(now()) @db.Timestamp(6)
+  qr_redirect_logs qr_redirect_logs[]
+  campaigns        campaigns?         @relation(fields: [campaign_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workspaces       workspaces?        @relation(fields: [workspace_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  scans            scans[]
+
+  @@index([short_code], map: "idx_qr_shortcode")
+  @@index([workspace_id], map: "idx_qr_workspace")
+}
+
+model scans {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  qr_id      String?   @db.Uuid
+  ip_address String?
+  country    String?
+  city       String?
+  device     String?
+  browser    String?
+  os         String?
+  scanned_at DateTime? @default(now()) @db.Timestamp(6)
+  qrcodes    qrcodes?  @relation(fields: [qr_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([qr_id], map: "idx_scans_qr")
+}
+
+model users {
+  id         String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name       String?
+  email      String       @unique
+  password   String?
+  plan       String?      @default("free")
+  created_at DateTime?    @default(now()) @db.Timestamp(6)
+  workspaces workspaces[]
+}
+
+model workspaces {
+  id         String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name       String
+  owner_id   String?     @db.Uuid
+  created_at DateTime?   @default(now()) @db.Timestamp(6)
+  bulk_jobs  bulk_jobs[]
+  campaigns  campaigns[]
+  qrcodes    qrcodes[]
+  users      users?      @relation(fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
